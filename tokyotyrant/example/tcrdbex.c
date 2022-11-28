@@ -12,7 +12,7 @@ int main(int argc, char **argv){
   /* create the object */
   rdb = tcrdbnew();
 
-  /* open the database */
+  /* connect to the server */
   if(!tcrdbopen(rdb, "localhost", 1978)){
     ecode = tcrdbecode(rdb);
     fprintf(stderr, "open error: %s\n", tcrdberrmsg(ecode));
@@ -36,7 +36,7 @@ int main(int argc, char **argv){
     fprintf(stderr, "get error: %s\n", tcrdberrmsg(ecode));
   }
 
-  /* close the database */
+  /* close the connection */
   if(!tcrdbclose(rdb)){
     ecode = tcrdbecode(rdb);
     fprintf(stderr, "close error: %s\n", tcrdberrmsg(ecode));

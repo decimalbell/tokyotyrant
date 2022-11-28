@@ -11,40 +11,65 @@ cmd="ttserver"
 basedir="/var/ttserver"
 port="1978"
 pidfile="$basedir/pid"
-logfile="$basedir/log"
-ulogdir="$basedir/ulog"
-ulimsiz="256m"
-sid=1
+#logfile="$basedir/log"
+#ulogdir="$basedir/ulog"
+#ulimsiz="256m"
+#sid=1
+#mhost="remotehost1"
+#mport="1978"
+#rtsfile="$basedir/rts"
 dbname="$basedir/casket.tch#bnum=1000000"
-maxcon="65536"
 retval=0
 
 
-# locale clear
+# setting environment variables
 LANG=C
 LC_ALL=C
-export LANG LC_ALL
+PATH="$PATH:/sbin:/usr/sbin:/usr/local/sbin"
+export LANG LC_ALL PATH
 
 
 # start the server
 start(){
   printf 'Starting the server of Tokyo Tyrant\n'
-  ulimit -n "$maxcon"
   mkdir -p "$basedir"
-  if [ -f "$pidfile" ] ; then
+  if [ -z "$basedir" ] || [ -z "$port" ] || [ -z "$pidfile" ] || [ -z "$dbname" ] ; then
+    printf 'Invalid configuration\n'
+    retval=1
+  elif ! [ -d "$basedir" ] ; then
+    printf 'No such directory: %s\n' "$basedir"
+    retval=1
+  elif [ -f "$pidfile" ] ; then
     pid=`cat "$pidfile"`
     printf 'Existing process: %d\n' "$pid"
     retval=1
   else
-    $cmd \
-      -port "$port" \
-      -dmn \
-      -pid "$pidfile" \
-      -log "$logfile" \
-      -ulog "$ulogdir" \
-      -ulim "$ulimsiz" \
-      -sid "$sid" \
-      "$dbname"
+    cmd="$cmd -port $port -dmn -pid $pidfile"
+    if [ -n "$logfile" ] ; then
+      cmd="$cmd -log $logfile"
+    fi
+    if [ -n "$ulogdir" ] ; then
+      mkdir -p "$ulogdir"
+      cmd="$cmd -ulog $ulogdir"
+    fi
+    if [ -n "$ulimsiz" ] ; then
+      cmd="$cmd -ulim $ulimsiz"
+    fi
+    if [ -n "$sid" ] ; then
+      cmd="$cmd -sid $sid"
+    fi
+    if [ -n "$mhost" ] ; then
+      cmd="$cmd -mhost $mhost"
+    fi
+    if [ -n "$mport" ] ; then
+      cmd="$cmd -mport $mport"
+    fi
+    if [ -n "$rtsfile" ] ; then
+      cmd="$cmd -rts $rtsfile"
+    fi
+    printf "Executing: %s\n" "$cmd"
+    cmd="$cmd $dbname"
+    $cmd
     if [ "$?" -eq 0 ] ; then
       printf 'Done\n'
     else
@@ -60,6 +85,7 @@ stop(){
   printf 'Stopping the server of Tokyo Tyrant\n'
   if [ -f "$pidfile" ] ; then
     pid=`cat "$pidfile"`
+    printf "Sending the terminal signal to the process: %s\n" "$pid"
     kill -TERM "$pid"
     c=0
     while true ; do
@@ -67,7 +93,7 @@ stop(){
       if [ -f "$pidfile" ] ; then
         c=`expr $c + 1`
         if [ "$c" -ge 100 ] ; then
-          printf 'Hunging process: %d\n' "$pid"
+          printf 'Hanging process: %d\n' "$pid"
           retval=1
           break
         fi
@@ -88,6 +114,7 @@ hup(){
   printf 'Sending HUP signal to the server of Tokyo Tyrant\n'
   if [ -f "$pidfile" ] ; then
     pid=`cat "$pidfile"`
+    printf "Sending the hangup signal to the process: %s\n" "$pid"
     kill -HUP "$pid"
     printf 'Done\n'
   else

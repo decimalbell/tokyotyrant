@@ -28,6 +28,7 @@ INITFILES = @MYINITFILES@
 MAN1FILES = @MYMAN1FILES@
 MAN3FILES = @MYMAN3FILES@
 MAN8FILES = @MYMAN8FILES@
+SCREXTFILES = @MYSCREXTFILES@
 DOCUMENTFILES = @MYDOCUMENTFILES@
 PCFILES = @MYPCFILES@
 
@@ -55,6 +56,7 @@ CPPFLAGS = @MYCPPFLAGS@ \
   -D_TT_APPINC="\"-I$(INCLUDEDIR)\"" -D_TT_APPLIBS="\"-L$(LIBDIR) -ltokyotyrant @LIBS@\""
 CFLAGS = @MYCFLAGS@
 LDFLAGS = @MYLDFLAGS@
+CMDLDFLAGS = @MYCMDLDFLAGS@
 LIBS = @LIBS@
 LDENV = LD_RUN_PATH=/lib:/usr/lib:$(LIBDIR):$(HOME)/lib:/usr/local/lib:@MYRUNPATH@:.
 RUNENV = @MYLDLIBPATHENV@=.:/lib:/usr/lib:$(LIBDIR):$(HOME)/lib:/usr/local/lib:@MYRUNPATH@
@@ -90,8 +92,9 @@ all : $(LIBRARYFILES) $(COMMANDFILES)
 
 clean :
 	rm -rf $(LIBRARYFILES) $(LIBOBJFILES) $(COMMANDFILES) \
-	  *.o a.out check.in check.out gmon.out leak.log \
-	  casket casket-* casket.* *.ulog ulog 1978* 1979* *.rts *.pid *~ hoge moge
+	  *.o a.out check.in check.out gmon.out *.vlog words.tsv \
+	  casket casket-* casket.* *.tch *.tcb *.tcf *.tct *.idx.* \
+	  *.ulog ulog 1978* 1979* *.rts *.pid *~ hoge moge tako ika
 
 
 version :
@@ -100,6 +103,7 @@ version :
 	    -e "s/_TT_LIBVER.*/_TT_LIBVER     $$vernum/" \
 	    -e 's/_TT_PROTVER.*/_TT_PROTVER    "$(PROTVER)"/' ttutil.h > ttutil.h~
 	[ -f ttutil.h~ ] && mv -f ttutil.h~ ttutil.h
+
 
 untabify :
 	ls *.c *.h | while read name ; \
@@ -119,7 +123,7 @@ install :
 	mkdir -p $(DESTDIR)$(SBINDIR)
 	cp -Rf $(INITFILES) $(DESTDIR)$(SBINDIR)
 	mkdir -p $(DESTDIR)$(DATADIR)
-	cp -Rf $(DOCUMENTFILES) $(DESTDIR)$(DATADIR)
+	cp -Rf $(SCREXTFILES) $(DOCUMENTFILES) $(DESTDIR)$(DATADIR)
 	mkdir -p $(DESTDIR)$(MAN1DIR)
 	cd man && cp -Rf $(MAN1FILES) $(DESTDIR)$(MAN1DIR)
 	mkdir -p $(DESTDIR)$(MAN3DIR)
@@ -128,6 +132,7 @@ install :
 	cd man && cp -Rf $(MAN8FILES) $(DESTDIR)$(MAN8DIR)
 	mkdir -p $(DESTDIR)$(PCDIR)
 	cp -Rf $(PCFILES) $(DESTDIR)$(PCDIR)
+	[ "$$UID" == 0 ] && ldconfig || true
 	@printf '\n'
 	@printf '#================================================================\n'
 	@printf '# Thanks for using Tokyo Tyrant.\n'
@@ -149,6 +154,7 @@ uninstall :
 	cd $(DESTDIR)$(MAN8DIR) && rm -f $(MAN8FILES)
 	rm -rf $(DESTDIR)$(DATADIR)
 	cd $(DESTDIR)$(PCDIR) && rm -f $(PCFILES)
+	[ "$$UID" == 0 ] && ldconfig || true
 
 
 dist :
@@ -160,25 +166,32 @@ dist :
 
 
 distclean : clean
+	cd example && make clean
 	rm -rf Makefile tokyotyrant.pc config.cache config.log config.status autom4te.cache
 
 
 check :
-	rm -rf casket* ulog
 	$(RUNENV) $(RUNCMD) ./tcrmgr version
-	$(RUNENV) $(RUNCMD) ./tcrtest write -cnum 5 -rnd 127.0.0.1 50000
-	$(RUNENV) $(RUNCMD) ./tcrtest write -cnum 5 -nr -rnd 127.0.0.1 50000
-	$(RUNENV) $(RUNCMD) ./tcrtest write -cnum 5 127.0.0.1 50000
-	$(RUNENV) $(RUNCMD) ./tcrtest read -cnum 5 127.0.0.1
-	$(RUNENV) $(RUNCMD) ./tcrtest read -cnum 5 -mul 5 127.0.0.1
-	$(RUNENV) $(RUNCMD) ./tcrtest remove -cnum 5 127.0.0.1
-	$(RUNENV) $(RUNCMD) ./tcrtest rcat -cnum 5 127.0.0.1 50000
-	$(RUNENV) $(RUNCMD) ./tcrtest rcat -cnum 5 -rtt 50 127.0.0.1 50000
+	$(RUNENV) $(RUNCMD) ./tcrtest write -cnum 5 -tout 5 -rnd 127.0.0.1 50000
+	$(RUNENV) $(RUNCMD) ./tcrtest write -cnum 5 -tout 5 -nr -rnd 127.0.0.1 50000
+	$(RUNENV) $(RUNCMD) ./tcrtest write -cnum 5 -tout 5 127.0.0.1 50000
+	$(RUNENV) $(RUNCMD) ./tcrtest read -cnum 5 -tout 5 127.0.0.1
+	$(RUNENV) $(RUNCMD) ./tcrtest read -cnum 5 -tout 5 -mul 5 127.0.0.1
+	$(RUNENV) $(RUNCMD) ./tcrtest remove -cnum 5 -tout 5 127.0.0.1
+	$(RUNENV) $(RUNCMD) ./tcrtest rcat -cnum 5 -tout 5 127.0.0.1 50000
+	$(RUNENV) $(RUNCMD) ./tcrtest rcat -cnum 5 -tout 5 -shl 50 127.0.0.1 50000
 	$(RUNENV) $(RUNCMD) ./tcrmgr vanish 127.0.0.1
-	$(RUNENV) $(RUNCMD) ./tcrtest rcat -cnum 5 -dad 127.0.0.1 50000
-	$(RUNENV) $(RUNCMD) ./tcrtest misc -cnum 5 127.0.0.1 5000
-	$(RUNENV) $(RUNCMD) ./tcrtest wicked -cnum 5 127.0.0.1 5000
+	$(RUNENV) $(RUNCMD) ./tcrtest rcat -cnum 5 -tout 5 -dad 127.0.0.1 50000
+	$(RUNENV) $(RUNCMD) ./tcrtest rcat -cnum 5 -tout 5 -ext putcat -xlr 127.0.0.1 50000
+	$(RUNENV) $(RUNCMD) ./tcrtest misc -cnum 5 -tout 5 127.0.0.1 5000
+	$(RUNENV) $(RUNCMD) ./tcrtest wicked -cnum 5 -tout 5 127.0.0.1 5000
 	$(RUNENV) $(RUNCMD) ./tcrmgr inform 127.0.0.1
+	$(RUNENV) $(RUNCMD) ./tcrmgr vanish 127.0.0.1
+	$(RUNENV) $(RUNCMD) ./tcrmttest write -tnum 5 127.0.0.1 5000
+	$(RUNENV) $(RUNCMD) ./tcrmttest read -tnum 5 127.0.0.1
+	$(RUNENV) $(RUNCMD) ./tcrmttest remove -tnum 5 127.0.0.1
+	$(RUNENV) $(RUNCMD) ./tcrmttest write -tnum 5 -ext putcat -rnd 127.0.0.1 5000
+	$(RUNENV) $(RUNCMD) ./tcrmttest typical -tnum 5 127.0.0.1 5000
 	$(RUNENV) $(RUNCMD) ./tcrmgr vanish 127.0.0.1
 	$(RUNENV) $(RUNCMD) ./tcrmgr put 127.0.0.1 one first
 	$(RUNENV) $(RUNCMD) ./tcrmgr put 127.0.0.1 two second
@@ -194,6 +207,9 @@ check :
 	$(RUNENV) $(RUNCMD) ./tcrmgr get 127.0.0.1 four > check.out
 	$(RUNENV) $(RUNCMD) ./tcrmgr get 127.0.0.1 five > check.out
 	$(RUNENV) $(RUNCMD) ./tcrmgr mget 127.0.0.1 one two three four five > check.out
+	$(RUNENV) $(RUNCMD) ./tcrmgr misc 127.0.0.1 putlist six sixth seven seventh
+	$(RUNENV) $(RUNCMD) ./tcrmgr misc 127.0.0.1 outlist six
+	$(RUNENV) $(RUNCMD) ./tcrmgr misc 127.0.0.1 getlist three four five six > check.out
 	$(RUNENV) $(RUNCMD) ./tcrmgr list -pv 127.0.0.1 > check.out
 	$(RUNENV) $(RUNCMD) ./tcrmgr list -pv -fm f 127.0.0.1 > check.out
 	$(RUNENV) $(RUNCMD) ./tcrmgr http -ih http://127.0.0.1:1978/five > check.out
@@ -204,7 +220,6 @@ check :
 	rm -rf ulog ; mkdir -p ulog
 	$(RUNENV) $(RUNCMD) ./ttultest thread -lim 10000 ulog 5 5000
 	$(RUNENV) $(RUNCMD) ./ttultest thread -lim 10000 -as ulog 5 5000
-	rm -rf casket* ulog
 	@printf '\n'
 	@printf '#================================================================\n'
 	@printf '# Checking completed.\n'
@@ -212,9 +227,23 @@ check :
 
 
 check-valgrind :
-	make RUNCMD="valgrind --tool=memcheck --log-fd=1" check | tee leak.log
-	grep ERROR leak.log
-	grep 'at exit' leak.log
+	make RUNCMD="valgrind --tool=memcheck --log-file=%p.vlog" check
+	grep ERROR *.vlog | grep -v ' 0 errors' ; true
+	grep 'at exit' *.vlog | grep -v ' 0 bytes' ; true
+
+
+check-forever :
+	while true ; \
+	  do \
+	    make check || break ; \
+	  done
+
+
+words :
+	cat -n /usr/share/dict/words | \
+	  sed -e 's/^ *//' -e 'y/ABCDEFGHIJKLMNOPQRSTUVWXYZ/abcdefghijklmnopqrstuvwxyz/' \
+	    -e 's/^\([0-9]*\)\t\(.*\)/\2\t\1/' > words.tsv
+	./tcrmgr importtsv localhost words.tsv
 
 
 .PHONY : all clean install check
@@ -231,8 +260,14 @@ libtokyotyrant.a : $(LIBOBJFILES)
 
 
 libtokyotyrant.so.$(LIBVER).$(LIBREV).0 : $(LIBOBJFILES)
-	$(CC) -shared -Wl,-soname,libtokyotyrant.so.$(LIBVER) -o $@ $(LIBOBJFILES) \
-	  $(LDFLAGS) $(LIBS)
+	if uname -a | egrep -i 'SunOS' > /dev/null ; \
+	  then \
+	    $(CC) $(CFLAGS) -shared -Wl,-G,-h,libtokyotyrant.so.$(LIBVER) -o $@ \
+	      $(LIBOBJFILES) $(LDFLAGS) $(LIBS) ; \
+	  else \
+	    $(CC) $(CFLAGS) -shared -Wl,-soname,libtokyotyrant.so.$(LIBVER) -o $@ \
+	      $(LIBOBJFILES) $(LDFLAGS) $(LIBS) ; \
+	  fi
 
 
 libtokyotyrant.so.$(LIBVER) : libtokyotyrant.so.$(LIBVER).$(LIBREV).0
@@ -244,7 +279,7 @@ libtokyotyrant.so : libtokyotyrant.so.$(LIBVER).$(LIBREV).0
 
 
 libtokyotyrant.$(LIBVER).$(LIBREV).0.dylib : $(LIBOBJFILES)
-	$(CC) -dynamiclib -o $@ \
+	$(CC) $(CFLAGS) -dynamiclib -o $@ \
 	  -install_name $(LIBDIR)/libtokyotyrant.$(LIBVER).dylib \
 	  -current_version $(LIBVER).$(LIBREV).0 -compatibility_version $(LIBVER) \
 	  $(LIBOBJFILES) $(LDFLAGS) $(LIBS)
@@ -258,39 +293,75 @@ libtokyotyrant.dylib : libtokyotyrant.$(LIBVER).$(LIBREV).0.dylib
 	ln -f -s libtokyotyrant.$(LIBVER).$(LIBREV).0.dylib $@
 
 
-ttserver : ttserver.o $(LIBRARYFILES)
-	$(LDENV) $(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) -ltokyotyrant $(LIBS)
+ttskelmock.so : ttskelmock.o
+	$(CC) $(CFLAGS) -shared -o $@ $< $(LDFLAGS) $(LIBS)
+
+
+ttskeldir.so : ttskeldir.o
+	$(CC) $(CFLAGS) -shared -o $@ $< $(LDFLAGS) $(LIBS)
+
+
+ttskelproxy.so : ttskelproxy.o
+	$(CC) $(CFLAGS) -shared -o $@ $< $(LDFLAGS) $(LIBS)
+
+
+ttskelnull.so : ttskelnull.o
+	$(CC) $(CFLAGS) -shared -o $@ $< $(LDFLAGS) $(LIBS)
+
+
+ttskelmock.bundle : ttskelmock.o
+	$(CC) $(CFLAGS) -bundle -flat_namespace -undefined suppress -o $@ $< $(LDFLAGS) $(LIBS)
+
+
+ttskeldir.bundle : ttskeldir.o
+	$(CC) $(CFLAGS) -bundle -flat_namespace -undefined suppress -o $@ $< $(LDFLAGS) $(LIBS)
+
+
+ttskelproxy.bundle : ttskelproxy.o
+	$(CC) $(CFLAGS) -bundle -flat_namespace -undefined suppress -o $@ $< $(LDFLAGS) $(LIBS)
+
+
+ttskelnull.bundle : ttskelnull.o
+	$(CC) $(CFLAGS) -bundle -flat_namespace -undefined suppress -o $@ $< $(LDFLAGS) $(LIBS)
+
+
+ttserver : ttserver.o scrext.o $(LIBRARYFILES)
+	$(LDENV) $(CC) $(CFLAGS) -o $@ $< scrext.o $(LDFLAGS) $(CMDLDFLAGS) -ltokyotyrant $(LIBS)
 
 
 ttulmgr : ttulmgr.o $(LIBRARYFILES)
-	$(LDENV) $(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) -ltokyotyrant $(LIBS)
+	$(LDENV) $(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(CMDLDFLAGS) -ltokyotyrant $(LIBS)
 
 
 ttultest : ttultest.o $(LIBRARYFILES)
-	$(LDENV) $(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) -ltokyotyrant $(LIBS)
+	$(LDENV) $(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(CMDLDFLAGS) -ltokyotyrant $(LIBS)
 
 
 tcrtest : tcrtest.o $(LIBRARYFILES)
-	$(LDENV) $(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) -ltokyotyrant $(LIBS)
+	$(LDENV) $(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(CMDLDFLAGS) -ltokyotyrant $(LIBS)
 
 
 tcrmttest : tcrmttest.o $(LIBRARYFILES)
-	$(LDENV) $(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) -ltokyotyrant $(LIBS)
+	$(LDENV) $(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(CMDLDFLAGS) -ltokyotyrant $(LIBS)
 
 
 tcrmgr : tcrmgr.o $(LIBRARYFILES)
-	$(LDENV) $(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) -ltokyotyrant $(LIBS)
+	$(LDENV) $(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(CMDLDFLAGS) -ltokyotyrant $(LIBS)
 
 
-myconf.o : myconf.h
+myconf.o scrext.o : myconf.h
 
-ttutil.o : ttutil.h myconf.h
+ttutil.o : myconf.h ttutil.h
 
-tculog.o : tculog.h ttutil.h myconf.h
+tculog.o : myconf.h ttutil.h tculog.h
 
-tcrdb.o : tcrdb.h ttutil.h myconf.h
+tcrdb.o : myconf.h ttutil.h tcrdb.h
 
-ttserver.o ttulmgr.o ttultest.o tcrtest.o tcrmgr.o : ttutil.h tculog.h tcrdb.h myconf.h
+ttskelproxy.o : myconf.h ttutil.h tcrdb.h
+
+ttserver.o ttulmgr.o ttultest.o tcrtest.o tcrmgr.o : myconf.h ttutil.h tculog.h tcrdb.h
+
+ttserver.o : scrext.h
 
 
 

@@ -1,4 +1,4 @@
-.TH "TCRTEST" 1 "2008-03-15" "Man Page" "Tokyo Tyrant"
+.TH "TCRTEST" 1 "2010-08-05" "Man Page" "Tokyo Tyrant"
 
 .SH NAME
 tcrtest \- test cases of the remote database API
@@ -9,51 +9,70 @@ The command `\fBtcrtest\fR' is a utility for facility test and performance test.
 .PP
 .RS
 .br
-\fBtcrtest write \fR[\fB\-port \fInum\fB\fR]\fB \fR[\fB\-cnum \fInum\fB\fR]\fB \fR[\fB\-nr\fR]\fB \fR[\fB\-rnd\fR]\fB \fIhost\fB \fIrnum\fB\fR
+\fBtcrtest write \fR[\fB\-port \fInum\fB\fR]\fB \fR[\fB\-cnum \fInum\fB\fR]\fB \fR[\fB\-tout \fInum\fB\fR]\fB \fR[\fB\-nr\fR]\fB \fR[\fB\-rnd\fR]\fB \fIhost\fB \fIrnum\fB\fR
 .RS
 Store records with keys of 8 bytes.  They change as `00000001', `00000002'...
 .RE
 .br
-\fBtcrtest read \fR[\fB\-port \fInum\fB\fR]\fB \fR[\fB\-cnum \fInum\fB\fR]\fB \fR[\fB\-mul \fInum\fB\fR]\fB \fR[\fB\-rnd\fR]\fB \fIhost\fB\fR
+\fBtcrtest read \fR[\fB\-port \fInum\fB\fR]\fB \fR[\fB\-cnum \fInum\fB\fR]\fB \fR[\fB\-tout \fInum\fB\fR]\fB \fR[\fB\-mul \fInum\fB\fR]\fB \fR[\fB\-rnd\fR]\fB \fIhost\fB\fR
 .RS
 Retrieve all records of the database above.
 .RE
 .br
-\fBtcrtest remove \fR[\fB\-port \fInum\fB\fR]\fB \fR[\fB\-cnum \fInum\fB\fR]\fB \fR[\fB\-rnd\fR]\fB \fIhost\fB\fR
+\fBtcrtest remove \fR[\fB\-port \fInum\fB\fR]\fB \fR[\fB\-cnum \fInum\fB\fR]\fB \fR[\fB\-tout \fInum\fB\fR]\fB \fR[\fB\-rnd\fR]\fB \fIhost\fB\fR
 .RS
 Remove all records of the database above.
 .RE
 .br
-\fBtcrtest rcat \fR[\fB\-port \fInum\fB\fR]\fB \fR[\fB\-cnum \fInum\fB\fR]\fB \fR[\fB\-rtt \fInum\fB\fR]\fB \fIhost\fB \fIrnum\fB\fR
+\fBtcrtest rcat \fR[\fB\-port \fInum\fB\fR]\fB \fR[\fB\-cnum \fInum\fB\fR]\fB \fR[\fB\-tout \fInum\fB\fR]\fB \fR[\fB\-shl \fInum\fB\fR]\fB \fR[\fB\-dai\fR|\fB\-dad\fR]\fB \fR[\fB\-ext \fIname\fB\fR]\fB \fR[\fB\-xlr\fR|\fB\-xlg\fR]\fB \fIhost\fB \fIrnum\fB\fR
 .RS
 Store records with partway duplicated keys using concatenate mode.
 .RE
 .br
-\fBtcrtest misc \fR[\fB\-port \fInum\fB\fR]\fB \fR[\fB\-cnum \fInum\fB\fR]\fB \fIhost\fB \fIrnum\fB\fR
+\fBtcrtest misc \fR[\fB\-port \fInum\fB\fR]\fB \fR[\fB\-cnum \fInum\fB\fR]\fB \fR[\fB\-tout \fInum\fB\fR]\fB \fIhost\fB \fIrnum\fB\fR
 .RS
 Perform miscellaneous test of various operations.
 .RE
 .br
-\fBtcrtest wicked \fR[\fB\-port \fInum\fB\fR]\fB \fR[\fB\-cnum \fInum\fB\fR]\fB \fIhost\fB \fIrnum\fB\fR
+\fBtcrtest wicked \fR[\fB\-port \fInum\fB\fR]\fB \fR[\fB\-cnum \fInum\fB\fR]\fB \fR[\fB\-tout \fInum\fB\fR]\fB \fIhost\fB \fIrnum\fB\fR
 .RS
 Perform updating operations of list and map selected at random.
+.RE
+.br
+\fBtcrtest table \fR[\fB\-port \fInum\fB\fR]\fB \fR[\fB\-cnum \fInum\fB\fR]\fB \fR[\fB\-tout \fInum\fB\fR]\fB \fR[\fB\-exp \fInum\fB\fR]\fB \fIhost\fB \fIrnum\fB\fR
+.RS
+Perform miscellaneous test of the table extension.
 .RE
 .RE
 .PP
 Options feature the following.
 .PP
 .RS
-\fB\-port\fR \fInum\fR : specify the port number.
+\fB\-port \fInum\fR\fR : specify the port number.
 .br
-\fB\-cnum\fR \fInum\fR : specify the number of connections.
+\fB\-cnum \fInum\fR\fR : specify the number of connections.
+.br
+\fB\-tout \fInum\fR\fR : specify the timeout of each session in seconds.
 .br
 \fB\-nr\fR : use the function `tcrdbputnr' instead of `tcrdbput'.
 .br
 \fB\-rnd\fR : select keys at random.
 .br
-\fB\-mul\fR \fInum\fR : specify the number of records for the mget command.
+\fB\-mul \fInum\fR\fR : specify the number of records for the mget command.
 .br
-\fB\-rtt\fR \fInum\fR : use `tcrdbputrtt' and specify the width.
+\fB\-shl \fInum\fR\fR : use `tcrdbputshl' and specify the width.
+.br
+\fB\-dai\fR : use `tcrdbaddint' instead of `tcrdbputcat'.
+.br
+\fB\-dad\fR : use `tcrdbadddouble' instead of `tcrdbputcat'.
+.br
+\fB\-ext \fIname\fR\fR : call a script language extension function.
+.br
+\fB\-xlr\fR : perform record locking.
+.br
+\fB\-xlg\fR : perform global locking.
+.br
+\fB\-exp \fInum\fR\fR : specify the lifetime of expiration test.
 .br
 .RE
 .PP

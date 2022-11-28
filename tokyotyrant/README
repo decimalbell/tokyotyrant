@@ -1,6 +1,6 @@
 ================================================================
  Tokyo Tyrant: network interface of Tokyo Cabinet
- Copyright (C) 2007-2008 Mikio Hirabayashi
+ Copyright (C) 2006-2009 FAL Labs
 ================================================================
 
 
@@ -19,6 +19,7 @@ Contents of the directory tree is below.
   ./             - sources of Tokyo Tyrant
   ./doc/         - manuals and specifications
   ./man/         - manuals for nroff
+  ./ext/         - sample script for the script extension
   ./example/     - sample code of tutorial
   ./lab/         - for test and experiment
 
@@ -26,8 +27,8 @@ Contents of the directory tree is below.
 Tokyo Tyrant is released under the terms of the GNU Lesser General
 Public License.  See the file `COPYING' for details.
 
-Tokyo Tyrant was written by Mikio Hirabayashi.  You can contact the
-author by e-mail to `mikio@users.sourceforge.net'.
+Tokyo Tyrant was written by FAL Labs.  You can contact the author
+by e-mail to `info@fallabs.com'.
 
 
 Thanks.

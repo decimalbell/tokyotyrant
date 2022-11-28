@@ -1,6 +1,6 @@
 /*************************************************************************************************
  * The utility API of Tokyo Tyrant
- *                                                      Copyright (C) 2006-2008 Mikio Hirabayashi
+ *                                                               Copyright (C) 2006-2010 FAL Labs
  * This file is part of Tokyo Tyrant.
  * Tokyo Tyrant is free software; you can redistribute it and/or modify it under the terms of
  * the GNU Lesser General Public License as published by the Free Software Foundation; either
@@ -18,13 +18,18 @@
 #include "myconf.h"
 
 
+
 /*************************************************************************************************
  * basic utilities
  *************************************************************************************************/
 
 
 #define SOCKPATHBUFSIZ 108               // size of a socket path buffer
-#define HTTPLINEBUFSIZ 2048              // size of a line buffer of HTTP
+#define SOCKRCVTIMEO   0.25              // timeout of the recv call of socket
+#define SOCKSNDTIMEO   0.25              // timeout of the send call of socket
+#define SOCKCNCTTIMEO  5.0               // timeout of the connect call of socket
+#define SOCKLINEBUFSIZ 4096              // size of a line buffer of socket
+#define SOCKLINEMAXSIZ (16*1024*1024)    // maximum size of a line of socket
 #define HTTPBODYMAXSIZ (256*1024*1024)   // maximum size of the entity body of HTTP
 #define TRILLIONNUM    1000000000000     // trillion number
 
@@ -68,13 +73,10 @@ bool ttgethostaddr(const char *name, char *addr){
     freeaddrinfo(result);
     return false;
   }
-  struct sockaddr_in *sain = (struct sockaddr_in *)result->ai_addr;
-  uint32_t anum = sain->sin_addr.s_addr;
-  char *wp = addr;
-  for(int i = 0; i < sizeof(anum); i++){
-    if(i > 0) *(wp++) = '.';
-    wp += sprintf(wp, "%d", anum & 0xff);
-    anum = anum >> 8;
+  if(getnameinfo(result->ai_addr, result->ai_addrlen,
+                 addr, TTADDRBUFSIZ, NULL, 0, NI_NUMERICHOST) != 0){
+    freeaddrinfo(result);
+    return false;
   }
   freeaddrinfo(result);
   return true;
@@ -92,11 +94,30 @@ int ttopensock(const char *addr, int port){
   sain.sin_port = htons(snum);
   int fd = socket(PF_INET, SOCK_STREAM, 0);
   if(fd == -1) return -1;
-  if(connect(fd, (struct sockaddr *)&sain, sizeof(sain)) != 0){
-    close(fd);
-    return -1;
-  }
-  return fd;
+  int optint = 1;
+  setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (char *)&optint, sizeof(optint));
+  struct timeval opttv;
+  opttv.tv_sec = (int)SOCKRCVTIMEO;
+  opttv.tv_usec = (SOCKRCVTIMEO - (int)SOCKRCVTIMEO) * 1000000;
+  setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, (char *)&opttv, sizeof(opttv));
+  opttv.tv_sec = (int)SOCKSNDTIMEO;
+  opttv.tv_usec = (SOCKSNDTIMEO - (int)SOCKSNDTIMEO) * 1000000;
+  setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, (char *)&opttv, sizeof(opttv));
+  optint = 1;
+  setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *)&optint, sizeof(optint));
+  double dl = tctime() + SOCKCNCTTIMEO;
+  do {
+    int ocs = PTHREAD_CANCEL_DISABLE;
+    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &ocs);
+    int rv = connect(fd, (struct sockaddr *)&sain, sizeof(sain));
+    int en = errno;
+    pthread_setcancelstate(ocs, NULL);
+    if(rv == 0) return fd;
+    if(en != EINTR && en != EAGAIN && en != EINPROGRESS && en != EALREADY && en != ETIMEDOUT)
+      break;
+  } while(tctime() <= dl);
+  close(fd);
+  return -1;
 }
 
 
@@ -109,11 +130,28 @@ int ttopensockunix(const char *path){
   snprintf(saun.sun_path, SOCKPATHBUFSIZ, "%s", path);
   int fd = socket(PF_UNIX, SOCK_STREAM, 0);
   if(fd == -1) return -1;
-  if(connect(fd, (struct sockaddr *)&saun, sizeof(saun)) != 0){
-    close(fd);
-    return -1;
-  }
-  return fd;
+  int optint = 1;
+  setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (char *)&optint, sizeof(optint));
+  struct timeval opttv;
+  opttv.tv_sec = (int)SOCKRCVTIMEO;
+  opttv.tv_usec = (SOCKRCVTIMEO - (int)SOCKRCVTIMEO) * 1000000;
+  setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, (char *)&opttv, sizeof(opttv));
+  opttv.tv_sec = (int)SOCKSNDTIMEO;
+  opttv.tv_usec = (SOCKSNDTIMEO - (int)SOCKSNDTIMEO) * 1000000;
+  setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, (char *)&opttv, sizeof(opttv));
+  double dl = tctime() + SOCKCNCTTIMEO;
+  do {
+    int ocs = PTHREAD_CANCEL_DISABLE;
+    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &ocs);
+    int rv = connect(fd, (struct sockaddr *)&saun, sizeof(saun));
+    int en = errno;
+    pthread_setcancelstate(ocs, NULL);
+    if(rv == 0) return fd;
+    if(en != EINTR && en != EAGAIN && en != EINPROGRESS && en != EALREADY && en != ETIMEDOUT)
+      break;
+  } while(tctime() <= dl);
+  close(fd);
+  return -1;
 }
 
 
@@ -128,8 +166,8 @@ int ttopenservsock(const char *addr, int port){
   sain.sin_port = htons(snum);
   int fd = socket(PF_INET, SOCK_STREAM, 0);
   if(fd == -1) return -1;
-  int optone = 1;
-  if(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *)&optone, sizeof(optone)) != 0){
+  int optint = 1;
+  if(setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (char *)&optint, sizeof(optint)) != 0){
     close(fd);
     return -1;
   }
@@ -171,16 +209,20 @@ int ttacceptsock(int fd, char *addr, int *pp){
     socklen_t slen = sizeof(sain);
     int cfd = accept(fd, (struct sockaddr *)&sain, &slen);
     if(cfd >= 0){
-      int optone = 1;
-      setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (char *)&optone, sizeof(optone));
+      int optint = 1;
+      setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (char *)&optint, sizeof(optint));
+      struct timeval opttv;
+      opttv.tv_sec = (int)SOCKRCVTIMEO;
+      opttv.tv_usec = (SOCKRCVTIMEO - (int)SOCKRCVTIMEO) * 1000000;
+      setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&opttv, sizeof(opttv));
+      opttv.tv_sec = (int)SOCKSNDTIMEO;
+      opttv.tv_usec = (SOCKSNDTIMEO - (int)SOCKSNDTIMEO) * 1000000;
+      setsockopt(cfd, SOL_SOCKET, SO_SNDTIMEO, (char *)&opttv, sizeof(opttv));
+      optint = 1;
+      setsockopt(cfd, IPPROTO_TCP, TCP_NODELAY, (char *)&optint, sizeof(optint));
       if(addr){
-        uint32_t anum = sain.sin_addr.s_addr;
-        char *wp = addr;
-        for(int i = 0; i < sizeof(anum); i++){
-          if(i > 0) *(wp++) = '.';
-          wp += sprintf(wp, "%d", anum & 0xff);
-          anum = anum >> 8;
-        }
+        if(getnameinfo((struct sockaddr *)&sain, sizeof(sain), addr, TTADDRBUFSIZ,
+                       NULL, 0, NI_NUMERICHOST) != 0) sprintf(addr, "0.0.0.0");
       }
       if(pp) *pp = (int)ntohs(sain.sin_port);
       return cfd;
@@ -195,7 +237,18 @@ int ttacceptsockunix(int fd){
   assert(fd >= 0);
   do {
     int cfd = accept(fd, NULL, NULL);
-    if(cfd >= 0) return cfd;
+    if(cfd >= 0){
+      int optint = 1;
+      setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (char *)&optint, sizeof(optint));
+      struct timeval opttv;
+      opttv.tv_sec = (int)SOCKRCVTIMEO;
+      opttv.tv_usec = (SOCKRCVTIMEO - (int)SOCKRCVTIMEO) * 1000000;
+      setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, (char *)&opttv, sizeof(opttv));
+      opttv.tv_sec = (int)SOCKSNDTIMEO;
+      opttv.tv_usec = (SOCKSNDTIMEO - (int)SOCKSNDTIMEO) * 1000000;
+      setsockopt(cfd, SOL_SOCKET, SO_SNDTIMEO, (char *)&opttv, sizeof(opttv));
+      return cfd;
+    }
   } while(errno == EINTR || errno == EAGAIN);
   return -1;
 }
@@ -211,6 +264,37 @@ bool ttclosesock(int fd){
 }
 
 
+/* Wait an I/O event of a socket. */
+bool ttwaitsock(int fd, int mode, double timeout){
+  assert(fd >= 0 && mode >= 0 && timeout >= 0);
+  while(true){
+    fd_set set;
+    FD_ZERO(&set);
+    FD_SET(fd, &set);
+    double integ, fract;
+    fract = modf(timeout, &integ);
+    struct timespec ts;
+    ts.tv_sec = integ;
+    ts.tv_nsec = fract * 1000000000.0;
+    int rv = -1;
+    switch(mode){
+      case 0:
+        rv = pselect(fd + 1, &set, NULL, NULL, &ts, NULL);
+        break;
+      case 1:
+        rv = pselect(fd + 1, NULL, &set, NULL, &ts, NULL);
+        break;
+      case 2:
+        rv = pselect(fd + 1, NULL, NULL, &set, &ts, NULL);
+        break;
+    }
+    if(rv > 0) return true;
+    if(rv == 0 || errno != EINVAL) break;
+  }
+  return false;
+}
+
+
 /* Create a socket object. */
 TTSOCK *ttsocknew(int fd){
   assert(fd >= 0);
@@ -219,6 +303,8 @@ TTSOCK *ttsocknew(int fd){
   sock->rp = sock->buf;
   sock->ep = sock->buf;
   sock->end = false;
+  sock->to = 0.0;
+  sock->dl = HUGE_VAL;
   return sock;
 }
 
@@ -230,6 +316,14 @@ void ttsockdel(TTSOCK *sock){
 }
 
 
+/* Set the lifetime of a socket object. */
+void ttsocksetlife(TTSOCK *sock, double lifetime){
+  assert(sock && lifetime >= 0);
+  sock->to = lifetime >= INT_MAX ? 0.0 : lifetime;
+  sock->dl = tctime() + lifetime;
+}
+
+
 /* Send data by a socket. */
 bool ttsocksend(TTSOCK *sock, const void *buf, int size){
   assert(sock && buf && size >= 0);
@@ -237,15 +331,30 @@ bool ttsocksend(TTSOCK *sock, const void *buf, int size){
   do {
     int ocs = PTHREAD_CANCEL_DISABLE;
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &ocs);
+    if(sock->to > 0.0 && !ttwaitsock(sock->fd, 1, sock->to)){
+      pthread_setcancelstate(ocs, NULL);
+      return false;
+    }
     int wb = send(sock->fd, rp, size, 0);
+    int en = errno;
     pthread_setcancelstate(ocs, NULL);
     switch(wb){
-    case -1: if(errno != EINTR) return false;
-    case 0: break;
-    default:
-      rp += wb;
-      size -= wb;
-      break;
+      case -1:
+        if(en != EINTR && en != EAGAIN && en != EWOULDBLOCK){
+          sock->end = true;
+          return false;
+        }
+        if(tctime() > sock->dl){
+          sock->end = true;
+          return false;
+        }
+        break;
+      case 0:
+        break;
+      default:
+        rp += wb;
+        size -= wb;
+        break;
     }
   } while(size > 0);
   return true;
@@ -277,74 +386,74 @@ bool ttsockprintf(TTSOCK *sock, const char *format, ...){
       int tlen;
       char *tmp, tbuf[TTNUMBUFSIZ*2];
       switch(*format){
-      case 's':
-        tmp = va_arg(ap, char *);
-        if(!tmp) tmp = "(null)";
-        tcxstrcat2(xstr, tmp);
-        break;
-      case 'd':
-        if(lnum >= 2){
-          tlen = sprintf(tbuf, cbuf, va_arg(ap, long long));
-        } else if(lnum >= 1){
-          tlen = sprintf(tbuf, cbuf, va_arg(ap, long));
-        } else {
-          tlen = sprintf(tbuf, cbuf, va_arg(ap, int));
-        }
-        tcxstrcat(xstr, tbuf, tlen);
-        break;
-      case 'o': case 'u': case 'x': case 'X': case 'c':
-        if(lnum >= 2){
-          tlen = sprintf(tbuf, cbuf, va_arg(ap, unsigned long long));
-        } else if(lnum >= 1){
-          tlen = sprintf(tbuf, cbuf, va_arg(ap, unsigned long));
-        } else {
-          tlen = sprintf(tbuf, cbuf, va_arg(ap, unsigned int));
-        }
-        tcxstrcat(xstr, tbuf, tlen);
-        break;
-      case 'e': case 'E': case 'f': case 'g': case 'G':
-        if(lnum >= 1){
-          tlen = sprintf(tbuf, cbuf, va_arg(ap, long double));
-        } else {
-          tlen = sprintf(tbuf, cbuf, va_arg(ap, double));
-        }
-        tcxstrcat(xstr, tbuf, tlen);
-        break;
-      case '@':
-        tmp = va_arg(ap, char *);
-        if(!tmp) tmp = "(null)";
-        while(*tmp){
-          switch(*tmp){
-          case '&': tcxstrcat(xstr, "&amp;", 5); break;
-          case '<': tcxstrcat(xstr, "&lt;", 4); break;
-          case '>': tcxstrcat(xstr, "&gt;", 4); break;
-          case '"': tcxstrcat(xstr, "&quot;", 6); break;
-          default:
-            if(!((*tmp >= 0 && *tmp <= 0x8) || (*tmp >= 0x0e && *tmp <= 0x1f)))
-              tcxstrcat(xstr, tmp, 1);
-            break;
-          }
-          tmp++;
-        }
-        break;
-      case '?':
-        tmp = va_arg(ap, char *);
-        if(!tmp) tmp = "(null)";
-        while(*tmp){
-          unsigned char c = *(unsigned char *)tmp;
-          if((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-             (c >= '0' && c <= '9') || (c != '\0' && strchr("_-.", c))){
-            tcxstrcat(xstr, tmp, 1);
+        case 's':
+          tmp = va_arg(ap, char *);
+          if(!tmp) tmp = "(null)";
+          tcxstrcat2(xstr, tmp);
+          break;
+        case 'd':
+          if(lnum >= 2){
+            tlen = sprintf(tbuf, cbuf, va_arg(ap, long long));
+          } else if(lnum >= 1){
+            tlen = sprintf(tbuf, cbuf, va_arg(ap, long));
           } else {
-            tlen = sprintf(tbuf, "%%%02X", c);
-            tcxstrcat(xstr, tbuf, tlen);
+            tlen = sprintf(tbuf, cbuf, va_arg(ap, int));
           }
-          tmp++;
-        }
-        break;
-      case '%':
-        tcxstrcat(xstr, "%", 1);
-        break;
+          tcxstrcat(xstr, tbuf, tlen);
+          break;
+        case 'o': case 'u': case 'x': case 'X': case 'c':
+          if(lnum >= 2){
+            tlen = sprintf(tbuf, cbuf, va_arg(ap, unsigned long long));
+          } else if(lnum >= 1){
+            tlen = sprintf(tbuf, cbuf, va_arg(ap, unsigned long));
+          } else {
+            tlen = sprintf(tbuf, cbuf, va_arg(ap, unsigned int));
+          }
+          tcxstrcat(xstr, tbuf, tlen);
+          break;
+        case 'e': case 'E': case 'f': case 'g': case 'G':
+          if(lnum >= 1){
+            tlen = sprintf(tbuf, cbuf, va_arg(ap, long double));
+          } else {
+            tlen = sprintf(tbuf, cbuf, va_arg(ap, double));
+          }
+          tcxstrcat(xstr, tbuf, tlen);
+          break;
+        case '@':
+          tmp = va_arg(ap, char *);
+          if(!tmp) tmp = "(null)";
+          while(*tmp){
+            switch(*tmp){
+              case '&': tcxstrcat(xstr, "&amp;", 5); break;
+              case '<': tcxstrcat(xstr, "&lt;", 4); break;
+              case '>': tcxstrcat(xstr, "&gt;", 4); break;
+              case '"': tcxstrcat(xstr, "&quot;", 6); break;
+              default:
+                if(!((*tmp >= 0 && *tmp <= 0x8) || (*tmp >= 0x0e && *tmp <= 0x1f)))
+                  tcxstrcat(xstr, tmp, 1);
+                break;
+            }
+            tmp++;
+          }
+          break;
+        case '?':
+          tmp = va_arg(ap, char *);
+          if(!tmp) tmp = "(null)";
+          while(*tmp){
+            unsigned char c = *(unsigned char *)tmp;
+            if((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+               (c >= '0' && c <= '9') || (c != '\0' && strchr("_-.", c))){
+              tcxstrcat(xstr, tmp, 1);
+            } else {
+              tlen = sprintf(tbuf, "%%%02X", c);
+              tcxstrcat(xstr, tbuf, tlen);
+            }
+            tmp++;
+          }
+          break;
+        case '%':
+          tcxstrcat(xstr, "%", 1);
+          break;
       }
     } else {
       tcxstrcat(xstr, format, 1);
@@ -361,6 +470,11 @@ bool ttsockprintf(TTSOCK *sock, const char *format, ...){
 /* Receive data by a socket. */
 bool ttsockrecv(TTSOCK *sock, char *buf, int size){
   assert(sock && buf && size >= 0);
+  if(sock->rp + size <= sock->ep){
+    memcpy(buf, sock->rp, size);
+    sock->rp += size;
+    return true;
+  }
   bool err = false;
   char *wp = buf;
   while(size > 0){
@@ -380,10 +494,16 @@ bool ttsockrecv(TTSOCK *sock, char *buf, int size){
 int ttsockgetc(TTSOCK *sock){
   assert(sock);
   if(sock->rp < sock->ep) return *(unsigned char *)(sock->rp++);
+  int en;
   do {
     int ocs = PTHREAD_CANCEL_DISABLE;
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &ocs);
+    if(sock->to > 0.0 && !ttwaitsock(sock->fd, 0, sock->to)){
+      pthread_setcancelstate(ocs, NULL);
+      return -1;
+    }
     int rv = recv(sock->fd, sock->buf, TTIOBUFSIZ, 0);
+    en = errno;
     pthread_setcancelstate(ocs, NULL);
     if(rv > 0){
       sock->rp = sock->buf + 1;
@@ -393,7 +513,7 @@ int ttsockgetc(TTSOCK *sock){
       sock->end = true;
       return -1;
     }
-  } while(errno == EINTR);
+  } while((en == EINTR || en == EAGAIN || en == EWOULDBLOCK) && tctime() <= sock->dl);
   sock->end = true;
   return -1;
 }
@@ -431,29 +551,50 @@ bool ttsockgets(TTSOCK *sock, char *buf, int size){
 }
 
 
+/* Receive one line by a socket into allocated buffer. */
+char *ttsockgets2(TTSOCK *sock){
+  assert(sock);
+  bool err = false;
+  TCXSTR *xstr = tcxstrnew3(SOCKLINEBUFSIZ);
+  pthread_cleanup_push((void (*)(void *))tcxstrdel, xstr);
+  int size = 0;
+  while(true){
+    int c = ttsockgetc(sock);
+    if(c == '\n') break;
+    if(c == -1){
+      err = true;
+      break;
+    }
+    if(c != '\r'){
+      unsigned char b = c;
+      tcxstrcat(xstr, &b, sizeof(b));
+      size++;
+      if(size >= SOCKLINEMAXSIZ){
+        err = true;
+        break;
+      }
+    }
+  }
+  pthread_cleanup_pop(0);
+  return tcxstrtomalloc(xstr);
+}
+
+
 /* Receive an 32-bit integer by a socket. */
 uint32_t ttsockgetint32(TTSOCK *sock){
   assert(sock);
-  uint32_t num = ttsockgetc(sock) << 24;
-  num |= ttsockgetc(sock) << 16;
-  num |= ttsockgetc(sock) << 8;
-  num |= ttsockgetc(sock);
-  return num;
+  uint32_t num;
+  ttsockrecv(sock, (char *)&num, sizeof(num));
+  return TTNTOHL(num);
 }
 
 
 /* Receive an 64-bit integer by a socket. */
 uint64_t ttsockgetint64(TTSOCK *sock){
   assert(sock);
-  uint64_t num = (uint64_t)ttsockgetc(sock) << 56;
-  num |= (uint64_t)ttsockgetc(sock) << 48;
-  num |= (uint64_t)ttsockgetc(sock) << 40;
-  num |= (uint64_t)ttsockgetc(sock) << 32;
-  num |= (uint64_t)ttsockgetc(sock) << 24;
-  num |= (uint64_t)ttsockgetc(sock) << 16;
-  num |= (uint64_t)ttsockgetc(sock) << 8;
-  num |= (uint64_t)ttsockgetc(sock);
-  return num;
+  uint64_t num;
+  ttsockrecv(sock, (char *)&num, sizeof(num));
+  return TTNTOHLL(num);
 }
 
 
@@ -486,7 +627,7 @@ int tthttpfetch(const char *url, TCMAP *reqheads, TCMAP *resheads, TCXSTR *resbo
   const char *query = tcmapget2(elems, "query");
   if(scheme && !tcstricmp(scheme, "http") && host){
     if(*host == '\0') host = "127.0.0.1";
-    int pnum = port ? atoi(port) : 80;
+    int pnum = port ? tcatoi(port) : 80;
     if(pnum < 1) pnum = 80;
     if(!path) path = "/";
     char addr[TTADDRBUFSIZ];
@@ -513,37 +654,43 @@ int tthttpfetch(const char *url, TCMAP *reqheads, TCMAP *resheads, TCXSTR *resbo
         tcxstrprintf(obuf, "Authorization: Basic %s\r\n", enc);
         tcfree(enc);
       }
+      double tout = -1;
       if(reqheads){
         tcmapiterinit(reqheads);
         const char *name;
         while((name = tcmapiternext2(reqheads)) != NULL){
           if(strchr(name, ':') || !tcstricmp(name, "connection")) continue;
-          char *cap = tcstrdup(name);
-          tcstrtolower(cap);
-          char *wp = cap;
-          bool head = true;
-          while(*wp != '\0'){
-            if(head && *wp >= 'a' && *wp <= 'z') *wp -= 'a' - 'A';
-            head = *wp == '-' || *wp == ' ';
-            wp++;
+          if(!tcstricmp(name, "x-tt-timeout")){
+            tout = tcatof(tcmapget2(reqheads, name));
+          } else {
+            char *cap = tcstrdup(name);
+            tcstrtolower(cap);
+            char *wp = cap;
+            bool head = true;
+            while(*wp != '\0'){
+              if(head && *wp >= 'a' && *wp <= 'z') *wp -= 'a' - 'A';
+              head = *wp == '-' || *wp == ' ';
+              wp++;
+            }
+            tcxstrprintf(obuf, "%s: %s\r\n", cap, tcmapget2(reqheads, name));
+            tcfree(cap);
           }
-          tcxstrprintf(obuf, "%s: %s\r\n", cap, tcmapget2(reqheads, name));
-          tcfree(cap);
         }
       }
       tcxstrprintf(obuf, "\r\n", host);
+      if(tout > 0) ttsocksetlife(sock, tout);
       if(ttsocksend(sock, tcxstrptr(obuf), tcxstrsize(obuf))){
-        char line[HTTPLINEBUFSIZ];
-        if(ttsockgets(sock, line, HTTPLINEBUFSIZ) && tcstrfwm(line, "HTTP/")){
+        char line[SOCKLINEBUFSIZ];
+        if(ttsockgets(sock, line, SOCKLINEBUFSIZ) && tcstrfwm(line, "HTTP/")){
           tcstrsqzspc(line);
           const char *rp = strchr(line, ' ');
-          code = atoi(rp + 1);
+          code = tcatoi(rp + 1);
           if(resheads) tcmapput2(resheads, "STATUS", line);
         }
         if(code > 0){
           int clen = 0;
           bool chunked = false;
-          while(ttsockgets(sock, line, HTTPLINEBUFSIZ) && *line != '\0'){
+          while(ttsockgets(sock, line, SOCKLINEBUFSIZ) && *line != '\0'){
             tcstrsqzspc(line);
             char *pv = strchr(line, ':');
             if(!pv) continue;
@@ -553,7 +700,7 @@ int tthttpfetch(const char *url, TCMAP *reqheads, TCMAP *resheads, TCXSTR *resbo
             }
             tcstrtolower(line);
             if(!strcmp(line, "content-length")){
-              clen = atoi(pv);
+              clen = tcatoi(pv);
             } else if(!strcmp(line, "transfer-encoding")){
               if(!tcstricmp(pv, "chunked")) chunked = true;
             }
@@ -567,15 +714,15 @@ int tthttpfetch(const char *url, TCMAP *reqheads, TCMAP *resheads, TCXSTR *resbo
               body = tcmemdup("", 0);
               bsiz = 0;
             } else if(chunked){
-              int asiz = HTTPLINEBUFSIZ;
+              int asiz = SOCKLINEBUFSIZ;
               body = tcmalloc(asiz);
               bsiz = 0;
               while(true){
                 pthread_cleanup_push(free, body);
-                if(!ttsockgets(sock, line, HTTPLINEBUFSIZ)) err = true;
+                if(!ttsockgets(sock, line, SOCKLINEBUFSIZ)) err = true;
                 pthread_cleanup_pop(0);
                 if(err || *line == '\0') break;
-                int size = strtol(line, NULL, 16);
+                int size = tcatoih(line);
                 if(bsiz + size > HTTPBODYMAXSIZ){
                   err = true;
                   break;
@@ -608,7 +755,7 @@ int tthttpfetch(const char *url, TCMAP *reqheads, TCMAP *resheads, TCXSTR *resbo
                 pthread_cleanup_pop(0);
               }
             } else {
-              int asiz = HTTPLINEBUFSIZ;
+              int asiz = SOCKLINEBUFSIZ;
               body = tcmalloc(asiz);
               bsiz = 0;
               while(true){
@@ -653,7 +800,7 @@ void ttpackdouble(double num, char *buf){
   double dinteg, dfract;
   dfract = modf(num, &dinteg);
   int64_t linteg, lfract;
-  if(isnormal(dinteg)){
+  if(isnormal(dinteg) || dinteg == 0){
     linteg = dinteg;
     lfract = dfract * TRILLIONNUM;
   } else if(isinf(dinteg)){
@@ -663,7 +810,9 @@ void ttpackdouble(double num, char *buf){
     linteg = INT64_MIN;
     lfract = INT64_MIN;
   }
+  linteg = TTHTONLL(linteg);
   memcpy(buf, &linteg, sizeof(linteg));
+  lfract = TTHTONLL(lfract);
   memcpy(buf + sizeof(linteg), &lfract, sizeof(lfract));
 }
 
@@ -673,7 +822,9 @@ double ttunpackdouble(const char *buf){
   assert(buf);
   int64_t linteg, lfract;
   memcpy(&linteg, buf, sizeof(linteg));
+  linteg = TTNTOHLL(linteg);
   memcpy(&lfract, buf + sizeof(linteg), sizeof(lfract));
+  lfract = TTNTOHLL(lfract);
   if(lfract == INT64_MIN && linteg == INT64_MIN){
     return NAN;
   } else if(linteg == INT64_MAX){
@@ -694,8 +845,8 @@ double ttunpackdouble(const char *buf){
 #define TTADDRBUFSIZ   1024              // size of an address buffer
 #define TTDEFTHNUM     5                 // default number of threads
 #define TTEVENTMAX     256               // maximum number of events
-#define TTWAITREQUEST  200               // waiting milliseconds for requests
-#define TTWAITWORKER   100               // waiting milliseconds for finish of workers
+#define TTWAITREQUEST  0.2               // waiting seconds for requests
+#define TTWAITWORKER   0.1               // waiting seconds for finish of workers
 
 
 /* private function prototypes */
@@ -713,16 +864,18 @@ TTSERV *ttservnew(void){
   serv->queue = tclistnew();
   if(pthread_mutex_init(&serv->qmtx, NULL) != 0) tcmyfatal("pthread_mutex_init failed");
   if(pthread_cond_init(&serv->qcnd, NULL) != 0) tcmyfatal("pthread_cond_init failed");
+  if(pthread_mutex_init(&serv->tmtx, NULL) != 0) tcmyfatal("pthread_mutex_init failed");
+  if(pthread_cond_init(&serv->tcnd, NULL) != 0) tcmyfatal("pthread_cond_init failed");
   serv->thnum = TTDEFTHNUM;
   serv->timeout = 0;
   serv->term = false;
   serv->do_log = NULL;
   serv->opq_log = NULL;
-  serv->freq_timed = 0.0;
-  serv->do_timed = NULL;
-  serv->opq_timed = NULL;
+  serv->timernum = 0;
   serv->do_task = NULL;
   serv->opq_task = NULL;
+  serv->do_term = NULL;
+  serv->opq_term = NULL;
   return serv;
 }
 
@@ -730,8 +883,10 @@ TTSERV *ttservnew(void){
 /* Delete a server object. */
 void ttservdel(TTSERV *serv){
   assert(serv);
-  pthread_mutex_destroy(&serv->qmtx);
+  pthread_cond_destroy(&serv->tcnd);
+  pthread_mutex_destroy(&serv->tmtx);
   pthread_cond_destroy(&serv->qcnd);
+  pthread_mutex_destroy(&serv->qmtx);
   tclistdel(serv->queue);
   tcfree(serv);
 }
@@ -776,12 +931,15 @@ void ttservsetloghandler(TTSERV *serv, void (*do_log)(int, const char *, void *)
 }
 
 
-/* Set the timed handler of a server object. */
-void ttservsettimedhandler(TTSERV *serv, double freq, void (*do_timed)(void *), void *opq){
+/* Add a timed handler to a server object. */
+void ttservaddtimedhandler(TTSERV *serv, double freq, void (*do_timed)(void *), void *opq){
   assert(serv && freq >= 0.0 && do_timed);
-  serv->freq_timed = freq;
-  serv->do_timed = do_timed;
-  serv->opq_timed = opq;
+  if(serv->timernum >= TTTIMERMAX - 1) return;
+  TTTIMER *timer = serv->timers + serv->timernum;
+  timer->freq_timed = freq;
+  timer->do_timed = do_timed;
+  timer->opq_timed = opq;
+  serv->timernum++;
 }
 
 
@@ -790,6 +948,14 @@ void ttservsettaskhandler(TTSERV *serv, void (*do_task)(TTSOCK *, void *, TTREQ 
   assert(serv && do_task);
   serv->do_task = do_task;
   serv->opq_task = opq;
+}
+
+
+/* Set the termination handler of a server object. */
+void ttservsettermhandler(TTSERV *serv, void (*do_term)(void *), void *opq){
+  assert(serv && do_term);
+  serv->do_term = do_term;
+  serv->opq_term = opq;
 }
 
 
@@ -818,15 +984,15 @@ bool ttservstart(TTSERV *serv){
   }
   ttservlog(serv, TTLOGSYSTEM, "service started: %d", getpid());
   bool err = false;
-  TTTIMER timer;
-  timer.alive = false;
-  timer.serv = serv;
-  if(serv->do_timed){
-    if(pthread_create(&timer.thid, NULL, ttservtimer, &timer) == 0){
-      ttservlog(serv, TTLOGINFO, "timer thread started");
-      timer.alive = true;
+  for(int i = 0; i < serv->timernum; i++){
+    TTTIMER *timer = serv->timers + i;
+    timer->alive = false;
+    timer->serv = serv;
+    if(pthread_create(&(timer->thid), NULL, ttservtimer, timer) == 0){
+      ttservlog(serv, TTLOGINFO, "timer thread %d started", i + 1);
+      timer->alive = true;
     } else {
-      ttservlog(serv, TTLOGERROR, "pthread_create failed");
+      ttservlog(serv, TTLOGERROR, "pthread_create (ttservtimer) failed");
       err = true;
     }
   }
@@ -838,12 +1004,13 @@ bool ttservstart(TTSERV *serv){
     reqs[i].epfd = epfd;
     reqs[i].mtime = tctime();
     reqs[i].keep = false;
+    reqs[i].idx = i;
     if(pthread_create(&reqs[i].thid, NULL, ttservdeqtasks, reqs + i) == 0){
       ttservlog(serv, TTLOGINFO, "worker thread %d started", i + 1);
     } else {
       reqs[i].alive = false;
       err = true;
-      ttservlog(serv, TTLOGERROR, "pthread_create failed");
+      ttservlog(serv, TTLOGERROR, "pthread_create (ttservdeqtasks) failed");
     }
   }
   struct epoll_event ev;
@@ -857,7 +1024,7 @@ bool ttservstart(TTSERV *serv){
   ttservlog(serv, TTLOGSYSTEM, "listening started");
   while(!serv->term){
     struct epoll_event events[TTEVENTMAX];
-    int fdnum = epoll_wait(epfd, events, TTEVENTMAX, TTWAITREQUEST);
+    int fdnum = epoll_wait(epfd, events, TTEVENTMAX, TTWAITREQUEST * 1000);
     if(fdnum != -1){
       for(int i = 0; i < fdnum; i++){
         if(events[i].data.fd == lfd){
@@ -870,6 +1037,10 @@ bool ttservstart(TTSERV *serv){
             port = 0;
           } else {
             cfd = ttacceptsock(lfd, addr, &port);
+          }
+          if(epoll_reassoc(epfd, lfd) != 0){
+            if(cfd != -1) close(cfd);
+            cfd = -1;
           }
           if(cfd != -1){
             ttservlog(serv, TTLOGINFO, "connected: %s:%d", addr, port);
@@ -885,6 +1056,27 @@ bool ttservstart(TTSERV *serv){
           } else {
             err = true;
             ttservlog(serv, TTLOGERROR, "ttacceptsock failed");
+            if(epoll_ctl(epfd, EPOLL_CTL_DEL, lfd, NULL) != 0)
+              ttservlog(serv, TTLOGERROR, "epoll_ctl failed");
+            if(close(lfd) != 0) ttservlog(serv, TTLOGERROR, "close failed");
+            tcsleep(TTWAITWORKER);
+            if(serv->port < 1){
+              lfd = ttopenservsockunix(serv->host);
+              if(lfd == -1) ttservlog(serv, TTLOGERROR, "ttopenservsockunix failed");
+            } else {
+              lfd = ttopenservsock(serv->addr[0] != '\0' ? serv->addr : NULL, serv->port);
+              if(lfd == -1) ttservlog(serv, TTLOGERROR, "ttopenservsock failed");
+            }
+            if(lfd >= 0){
+              memset(&ev, 0, sizeof(ev));
+              ev.events = EPOLLIN;
+              ev.data.fd = lfd;
+              if(epoll_ctl(epfd, EPOLL_CTL_ADD, lfd, &ev) == 0){
+                ttservlog(serv, TTLOGSYSTEM, "listening restarted");
+              } else {
+                ttservlog(serv, TTLOGERROR, "epoll_ctl failed");
+              }
+            }
           }
         } else {
           int cfd = events[i].data.fd;
@@ -916,7 +1108,8 @@ bool ttservstart(TTSERV *serv){
       double ctime = tctime();
       for(int i = 0; i < thnum; i++){
         double itime = ctime - reqs[i].mtime;
-        if(itime > serv->timeout && pthread_cancel(reqs[i].thid) == 0){
+        if(itime > serv->timeout + TTWAITREQUEST + SOCKRCVTIMEO + SOCKSNDTIMEO &&
+           pthread_cancel(reqs[i].thid) == 0){
           ttservlog(serv, TTLOGINFO, "worker thread %d canceled by timeout", i + 1);
           void *rv;
           if(pthread_join(reqs[i].thid, &rv) == 0){
@@ -925,7 +1118,7 @@ bool ttservstart(TTSERV *serv){
             if(pthread_create(&reqs[i].thid, NULL, ttservdeqtasks, reqs + i) != 0){
               reqs[i].alive = false;
               err = true;
-              ttservlog(serv, TTLOGERROR, "pthread_create failed");
+              ttservlog(serv, TTLOGERROR, "pthread_create (ttservdeqtasks) failed");
             } else {
               ttservlog(serv, TTLOGINFO, "worker thread %d started", i + 1);
             }
@@ -943,7 +1136,12 @@ bool ttservstart(TTSERV *serv){
     err = true;
     ttservlog(serv, TTLOGERROR, "pthread_cond_broadcast failed");
   }
-  usleep(TTWAITWORKER * 1000);
+  if(pthread_cond_broadcast(&serv->tcnd) != 0){
+    err = true;
+    ttservlog(serv, TTLOGERROR, "pthread_cond_broadcast failed");
+  }
+  tcsleep(TTWAITWORKER);
+  if(serv->do_term) serv->do_term(serv->opq_term);
   for(int i = 0; i < thnum; i++){
     if(!reqs[i].alive) continue;
     if(pthread_cancel(reqs[i].thid) == 0)
@@ -960,27 +1158,29 @@ bool ttservstart(TTSERV *serv){
   if(tclistnum(serv->queue) > 0)
     ttservlog(serv, TTLOGINFO, "%d requests discarded", tclistnum(serv->queue));
   tclistclear(serv->queue);
-  if(timer.alive){
+  for(int i = 0; i < serv->timernum; i++){
+    TTTIMER *timer = serv->timers + i;
+    if(!timer->alive) continue;
     void *rv;
-    if(pthread_cancel(timer.thid) == 0)
-      ttservlog(serv, TTLOGINFO, "timer thread was canceled");
-    if(pthread_join(timer.thid, &rv) == 0){
-      ttservlog(serv, TTLOGINFO, "timer thread finished");
+    if(pthread_cancel(timer->thid) == 0)
+      ttservlog(serv, TTLOGINFO, "timer thread %d was canceled", i + 1);
+    if(pthread_join(timer->thid, &rv) == 0){
+      ttservlog(serv, TTLOGINFO, "timer thread %d finished", i + 1);
       if(rv && rv != PTHREAD_CANCELED) err = true;
     } else {
       err = true;
       ttservlog(serv, TTLOGERROR, "pthread_join failed");
     }
   }
-  if(close(epfd) != 0){
+  if(epoll_close(epfd) != 0){
     err = true;
-    ttservlog(serv, TTLOGERROR, "close failed");
+    ttservlog(serv, TTLOGERROR, "epoll_close failed");
   }
   if(serv->port < 1 && unlink(serv->host) == -1){
     err = true;
     ttservlog(serv, TTLOGERROR, "unlink failed");
   }
-  if(close(lfd) != 0){
+  if(lfd >= 0 && close(lfd) != 0){
     err = true;
     ttservlog(serv, TTLOGERROR, "close failed");
   }
@@ -1018,6 +1218,29 @@ bool ttserviskilled(TTSERV *serv){
 }
 
 
+/* Break a simple server expression. */
+char *ttbreakservexpr(const char *expr, int *pp){
+  assert(expr);
+  char *host = tcstrdup(expr);
+  char *pv = strchr(host, '#');
+  if(pv) *pv = '\0';
+  int port = -1;
+  pv = strchr(host, ':');
+  if(pv){
+    *(pv++) = '\0';
+    if(*pv >= '0' && *pv <= '9') port = tcatoi(pv);
+  }
+  if(port < 0) port = TTDEFPORT;
+  if(pp) *pp = port;
+  tcstrtrim(host);
+  if(*host == '\0'){
+    tcfree(host);
+    host = tcstrdup("127.0.0.1");
+  }
+  return host;
+}
+
+
 /* Call the timed function of a server object.
    `argp' specifies the argument structure of the server object.
    The return value is `NULL' on success and other on failure. */
@@ -1029,10 +1252,41 @@ static void *ttservtimer(void *argp){
     err = true;
     ttservlog(serv, TTLOGERROR, "pthread_setcancelstate failed");
   }
-  usleep(100000);
+  tcsleep(TTWAITWORKER);
+  double freqi;
+  double freqd = modf(timer->freq_timed, &freqi);
   while(!serv->term){
-    serv->do_timed(serv->opq_timed);
-    usleep(serv->freq_timed * 1000000);
+    if(pthread_mutex_lock(&serv->tmtx) == 0){
+      struct timeval tv;
+      struct timespec ts;
+      if(gettimeofday(&tv, NULL) == 0){
+        ts.tv_sec = tv.tv_sec + (int)freqi;
+        ts.tv_nsec = tv.tv_usec * 1000.0 + freqd * 1000000000.0;
+        if(ts.tv_nsec >= 1000000000){
+          ts.tv_nsec -= 1000000000;
+          ts.tv_sec++;
+        }
+      } else {
+        ts.tv_sec = (1ULL << (sizeof(time_t) * 8 - 1)) - 1;
+        ts.tv_nsec = 0;
+      }
+      int code = pthread_cond_timedwait(&serv->tcnd, &serv->tmtx, &ts);
+      if(code == 0 || code == ETIMEDOUT || code == EINTR){
+        if(pthread_mutex_unlock(&serv->tmtx) != 0){
+          err = true;
+          ttservlog(serv, TTLOGERROR, "pthread_mutex_unlock failed");
+          break;
+        }
+        if(code != 0 && !serv->term) timer->do_timed(timer->opq_timed);
+      } else {
+        pthread_mutex_unlock(&serv->tmtx);
+        err = true;
+        ttservlog(serv, TTLOGERROR, "pthread_cond_timedwait failed");
+      }
+    } else {
+      err = true;
+      ttservlog(serv, TTLOGERROR, "pthread_mutex_lock failed");
+    }
   }
   return err ? "error" : NULL;
 }
@@ -1075,7 +1329,7 @@ static void *ttservdeqtasks(void *argp){
       struct timespec ts;
       if(gettimeofday(&tv, NULL) == 0){
         ts.tv_sec = tv.tv_sec;
-        ts.tv_nsec = tv.tv_usec * 1000 + TTWAITREQUEST * 1000000;
+        ts.tv_nsec = tv.tv_usec * 1000.0 + TTWAITREQUEST * 1000000000.0;
         if(ts.tv_nsec >= 1000000000){
           ts.tv_nsec -= 1000000000;
           ts.tv_sec++;
@@ -1100,6 +1354,7 @@ static void *ttservdeqtasks(void *argp){
           pthread_cleanup_push((void (*)(void *))ttsockdel, sock);
           bool reuse;
           do {
+            if(serv->timeout > 0) ttsocksetlife(sock, serv->timeout);
             req->mtime = tctime();
             req->keep = false;
             ttservtask(sock, req);
@@ -1155,6 +1410,99 @@ static void *ttservdeqtasks(void *argp){
     ttservlog(serv, TTLOGERROR, "pthread_sigmask failed");
   }
   return err ? "error" : NULL;
+}
+
+
+
+/*************************************************************************************************
+ * features for experts
+ *************************************************************************************************/
+
+
+#define NULLDEV        "/dev/null"       // path of the null device
+
+
+/* Switch the process into the background. */
+bool ttdaemonize(void){
+  fflush(stdout);
+  fflush(stderr);
+  switch(fork()){
+    case -1: return false;
+    case 0: break;
+    default: _exit(0);
+  }
+  if(setsid() == -1) return false;
+  switch(fork()){
+    case -1: return false;
+    case 0: break;
+    default: _exit(0);
+  }
+  umask(0);
+  if(chdir(MYPATHSTR) == -1) return false;
+  close(0);
+  close(1);
+  close(2);
+  int fd = open(NULLDEV, O_RDWR, 0);
+  if(fd != -1){
+    dup2(fd, 0);
+    dup2(fd, 1);
+    dup2(fd, 2);
+    if(fd > 2) close(fd);
+  }
+  return true;
+}
+
+
+/* Get the load average of the system. */
+double ttgetloadavg(void){
+  double avgs[3];
+  int anum = getloadavg(avgs, sizeof(avgs) / sizeof(*avgs));
+  if(anum < 1) return 0.0;
+  return anum == 1 ? avgs[0] : avgs[1];
+}
+
+
+/* Convert a string to a time stamp. */
+uint64_t ttstrtots(const char *str){
+  assert(str);
+  if(!tcstricmp(str, "now")) str = "-1";
+  int64_t ts = tcatoi(str);
+  if(ts < 0) ts = tctime() * 1000000;
+  return ts;
+}
+
+
+/* Get the command name of a command ID number. */
+const char *ttcmdidtostr(int id){
+  switch(id){
+    case TTCMDPUT: return "put";
+    case TTCMDPUTKEEP: return "putkeep";
+    case TTCMDPUTCAT: return "putcat";
+    case TTCMDPUTSHL: return "putshl";
+    case TTCMDPUTNR: return "putnr";
+    case TTCMDOUT: return "out";
+    case TTCMDGET: return "get";
+    case TTCMDMGET: return "mget";
+    case TTCMDVSIZ: return "vsiz";
+    case TTCMDITERINIT: return "iterinit";
+    case TTCMDITERNEXT: return "iternext";
+    case TTCMDFWMKEYS: return "fwmkeys";
+    case TTCMDADDINT: return "addint";
+    case TTCMDADDDOUBLE: return "adddouble";
+    case TTCMDEXT: return "ext";
+    case TTCMDSYNC: return "sync";
+    case TTCMDOPTIMIZE: return "optimize";
+    case TTCMDVANISH: return "vanish";
+    case TTCMDCOPY: return "copy";
+    case TTCMDRESTORE: return "restore";
+    case TTCMDSETMST: return "setmst";
+    case TTCMDRNUM: return "rnum";
+    case TTCMDSIZE: return "size";
+    case TTCMDSTAT: return "stat";
+    case TTCMDMISC: return "misc";
+    case TTCMDREPL: return "repl";
+  }
+  return "(unknown)";
 }
 
 

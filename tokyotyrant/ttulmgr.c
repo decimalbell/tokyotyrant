@@ -1,6 +1,6 @@
 /*************************************************************************************************
  * The test cases of the update log API
- *                                                      Copyright (C) 2006-2008 Mikio Hirabayashi
+ *                                                               Copyright (C) 2006-2010 FAL Labs
  * This file is part of Tokyo Tyrant.
  * Tokyo Tyrant is free software; you can redistribute it and/or modify it under the terms of
  * the GNU Lesser General Public License as published by the Free Software Foundation; either
@@ -36,7 +36,6 @@ static void usage(void);
 static void printerr(const char *msg);
 static int printhex(const char *ptr, int size);
 static char *mygetline(FILE *ifp);
-static char *hextoobj(const char *str, int *sp);
 static int runexport(int argc, char **argv);
 static int runimport(int argc, char **argv);
 static int procexport(const char *upath, uint64_t ts, uint32_t sid);
@@ -116,45 +115,19 @@ static char *mygetline(FILE *ifp){
 }
 
 
-/* create a binary object from a hexadecimal string */
-static char *hextoobj(const char *str, int *sp){
-  int len = strlen(str);
-  char *buf = tcmalloc(len + 1);
-  int j = 0;
-  for(int i = 0; i < len; i += 2){
-    while(strchr(" \n\r\t\f\v", str[i])){
-      i++;
-    }
-    char mbuf[3];
-    if((mbuf[0] = str[i]) == '\0') break;
-    if((mbuf[1] = str[i+1]) == '\0') break;
-    mbuf[2] = '\0';
-    buf[j++] = (char)strtol(mbuf, NULL, 16);
-  }
-  buf[j] = '\0';
-  *sp = j;
-  return buf;
-}
-
-
-
-
 /* parse arguments of export command */
 static int runexport(int argc, char **argv){
   char *upath = NULL;
   uint64_t ts = 0;
-  uint32_t sid = 0;
-  bool ph = false;
+  uint32_t sid = UINT32_MAX;
   for(int i = 2; i < argc; i++){
     if(!upath && argv[i][0] == '-'){
       if(!strcmp(argv[i], "-ts")){
         if(++i >= argc) usage();
-        ts = strtoll(argv[i], NULL, 10);
+        ts = ttstrtots(argv[i]);
       } else if(!strcmp(argv[i], "-sid")){
         if(++i >= argc) usage();
-        sid = atoi(argv[i]);
-      } else if(!strcmp(argv[i], "-ph")){
-        ph = true;
+        sid = tcatoi(argv[i]);
       } else {
         usage();
       }
@@ -178,7 +151,7 @@ static int runimport(int argc, char **argv){
     if(!upath && argv[i][0] == '-'){
       if(!strcmp(argv[i], "-lim")){
         if(++i >= argc) usage();
-        lim = tcatoi(argv[i]);
+        lim = tcatoix(argv[i]);
       } else {
         usage();
       }
@@ -207,12 +180,17 @@ static int procexport(const char *upath, uint64_t ts, uint32_t sid){
     const char *rbuf;
     int rsiz;
     uint64_t rts;
-    uint32_t rsid;
-    while(!err && (rbuf = tculrdread(ulrd, &rsiz, &rts, &rsid)) != NULL){
-      if(rsid == sid) continue;
-      printf("%llu\t%u\t", (unsigned long long)rts, (unsigned int)rsid);
-      printhex(rbuf, rsiz);
-      putchar('\n');
+    uint32_t rsid, rmid;
+    while(!err && (rbuf = tculrdread(ulrd, &rsiz, &rts, &rsid, &rmid)) != NULL){
+      if(rsid == sid || rmid == sid) continue;
+      printf("%llu\t%u:%u\t", (unsigned long long)rts, (unsigned int)rsid, (unsigned int)rmid);
+      if(rsiz >= 2){
+        printf("%s\t", ttcmdidtostr(((unsigned char *)rbuf)[1]));
+        printhex(rbuf, rsiz);
+        putchar('\n');
+      } else {
+        printf("[broken entry]\n");
+      }
     }
     tculrddel(ulrd);
   } else {
@@ -238,28 +216,37 @@ static int procimport(const char *upath, uint64_t lim){
   bool err = false;
   char *line;
   while(!err && (line = mygetline(stdin)) != NULL){
-    uint64_t ts = strtoll(line, NULL, 10);
+    uint64_t ts = ttstrtots(line);
     char *pv = strchr(line, '\t');
     if(!pv || ts < 1){
       tcfree(line);
       continue;
     }
     pv++;
-    uint32_t sid = strtoll(pv, NULL, 10);
+    uint32_t sid = tcatoi(pv);
+    char *mp = strchr(pv, ':');
     pv = strchr(pv, '\t');
-    if(!pv || sid < 1){
+    if(!pv){
+      tcfree(line);
+      continue;
+    }
+    pv++;
+    uint32_t mid = 0;
+    if(mp && mp < pv) mid = tcatoi(mp + 1);
+    pv = strchr(pv, '\t');
+    if(!pv){
       tcfree(line);
       continue;
     }
     pv++;
     int osiz;
-    unsigned char *obj = (unsigned char *)hextoobj(pv, &osiz);
-    if(!obj || osiz < 3 || *obj != 0xc8){
+    unsigned char *obj = (unsigned char *)tchexdecode(pv, &osiz);
+    if(!obj || osiz < 3 || *obj != TTMAGICNUM){
       tcfree(obj);
       tcfree(line);
       continue;
     }
-    if(!tculogwrite(ulog, ts, sid, obj, osiz)){
+    if(!tculogwrite(ulog, ts, sid, mid, obj, osiz)){
       printerr("tculogwrite");
       err = true;
     }

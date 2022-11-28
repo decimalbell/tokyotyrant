@@ -1,4 +1,4 @@
-.TH "TCRMTTEST" 1 "2008-03-15" "Man Page" "Tokyo Tyrant"
+.TH "TCRMTTEST" 1 "2010-08-05" "Man Page" "Tokyo Tyrant"
 
 .SH NAME
 tcrmttest \- test cases of the remote database API
@@ -9,7 +9,7 @@ The command `\fBtcrmttest\fR' is a utility for facility test under multi\-thread
 .PP
 .RS
 .br
-\fBtcrmttest write \fR[\fB\-port \fInum\fB\fR]\fB \fR[\fB\-tnum \fInum\fB\fR]\fB \fR[\fB\-nr\fR]\fB \fR[\fB\-rnd\fR]\fB \fIhost\fB \fIrnum\fB\fR
+\fBtcrmttest write \fR[\fB\-port \fInum\fB\fR]\fB \fR[\fB\-tnum \fInum\fB\fR]\fB \fR[\fB\-nr\fR]\fB \fR[\fB\-rnd\fR]\fB \fR[\fB\-ext \fIname\fB\fR]\fB \fIhost\fB \fIrnum\fB\fR
 .RS
 Store records with keys of 8 bytes.  They change as `00000001', `00000002'...
 .RE
@@ -28,15 +28,17 @@ Remove all records of the database above.
 Options feature the following.
 .PP
 .RS
-\fB\-port\fR \fInum\fR : specify the port number.
+\fB\-port \fInum\fR\fR : specify the port number.
 .br
-\fB\-tnum\fR \fInum\fR : specify the number of running threads.
+\fB\-tnum \fInum\fR\fR : specify the number of running threads.
 .br
 \fB\-nr\fR : use the function `tcrdbputnr' instead of `tcrdbput'.
 .br
 \fB\-rnd\fR : select keys at random.
 .br
-\fB\-mul\fR \fInum\fR : specify the number of records for the mget command.
+\fB\-ext \fIname\fR\fR : call a script language extension function.
+.br
+\fB\-mul \fInum\fR\fR : specify the number of records for the mget command.
 .br
 .RE
 .PP

@@ -1,6 +1,6 @@
 /*************************************************************************************************
  * System-dependent configurations of Tokyo Tyrant
- *                                                      Copyright (C) 2006-2008 Mikio Hirabayashi
+ *                                                               Copyright (C) 2006-2010 FAL Labs
  * This file is part of Tokyo Tyrant.
  * Tokyo Tyrant is free software; you can redistribute it and/or modify it under the terms of
  * the GNU Lesser General Public License as published by the Free Software Foundation; either
@@ -27,71 +27,72 @@
 #if defined(__linux__)
 
 #define _SYS_LINUX_
-#define ESTSYSNAME  "Linux"
+#define TTSYSNAME   "Linux"
 
 #elif defined(__FreeBSD__)
 
 #define _SYS_FREEBSD_
-#define ESTSYSNAME  "FreeBSD"
+#define TTSYSNAME   "FreeBSD"
 
 #elif defined(__NetBSD__)
 
 #define _SYS_NETBSD_
-#define ESTSYSNAME  "NetBSD"
+#define TTSYSNAME   "NetBSD"
 
 #elif defined(__OpenBSD__)
 
 #define _SYS_OPENBSD_
-#define ESTSYSNAME  "OpenBSD"
+#define TTSYSNAME   "OpenBSD"
 
-#elif defined(__sun__)
+#elif defined(__sun__) || defined(__sun)
 
 #define _SYS_SUNOS_
-#define ESTSYSNAME  "SunOS"
+#define TTSYSNAME   "SunOS"
 
 #elif defined(__hpux)
 
 #define _SYS_HPUX_
-#define ESTSYSNAME  "HP-UX"
+#define TTSYSNAME   "HP-UX"
 
 #elif defined(__osf)
 
 #define _SYS_TRU64_
-#define ESTSYSNAME  "Tru64"
+#define TTSYSNAME   "Tru64"
 
 #elif defined(_AIX)
 
 #define _SYS_AIX_
-#define ESTSYSNAME  "AIX"
+#define TTSYSNAME   "AIX"
 
 #elif defined(__APPLE__) && defined(__MACH__)
 
 #define _SYS_MACOSX_
-#define ESTSYSNAME  "Mac OS X"
+#define TTSYSNAME   "Mac OS X"
 
 #elif defined(_MSC_VER)
 
 #define _SYS_MSVC_
-#define ESTSYSNAME  "Windows (VC++)"
+#define TTSYSNAME   "Windows (VC++)"
 
 #elif defined(_WIN32)
 
 #define _SYS_MINGW_
-#define ESTSYSNAME  "Windows (MinGW)"
+#define TTSYSNAME   "Windows (MinGW)"
 
 #elif defined(__CYGWIN__)
 
 #define _SYS_CYGWIN_
-#define ESTSYSNAME  "Windows (Cygwin)"
+#define TTSYSNAME   "Windows (Cygwin)"
 
 #else
 
 #define _SYS_GENERIC_
-#define ESTSYSNAME  "Generic"
+#define TTSYSNAME   "Generic"
 
 #endif
 
-#if !defined(_SYS_LINUX_) && !defined(_SYS_FREEBSD_) && !defined(_SYS_MACOSX_)
+#if !defined(_SYS_LINUX_) && !defined(_SYS_FREEBSD_) && !defined(_SYS_MACOSX_) && \
+  !defined(_SYS_SUNOS_)
 #error =======================================
 #error Your platform is not supported.  Sorry.
 #error =======================================
@@ -195,25 +196,43 @@
 #include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/select.h>
 #include <fcntl.h>
 #include <dirent.h>
 #include <aio.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <dlfcn.h>
 
 #include <pthread.h>
 
 #include <tcutil.h>
 #include <tchdb.h>
 #include <tcbdb.h>
+#include <tcfdb.h>
+#include <tctdb.h>
 #include <tcadb.h>
 
 #if defined(_SYS_FREEBSD_) || defined(_SYS_MACOSX_)
 #define TTUSEKQUEUE    1
+#elif defined(_SYS_SUNOS_)
+
+/* to check the possilibity of compilation on Linux
+
+#define port_create() (1)
+#define port_associate(aaa, bbb, ccc, ddd, eee) (0)
+#define port_dissociate(aaa, bbb, ccc) (0)
+typedef struct { int portev_object; } port_event_t;
+#define port_getn(aaa, bbb, ccc, ddd, eee) (0)
+#define PORT_SOURCE_FD 0
+*/
+
+#include <sys/loadavg.h>
+#define TTUSEEVPORTS   1
 #else
 #include <sys/epoll.h>
-#define TTUSEKQUEUE    0
 #endif
 
 
@@ -223,7 +242,10 @@
  *************************************************************************************************/
 
 
-#define sizeof(a)      ((int)sizeof(a))
+#if defined(_SYS_FREEBSD_) || defined(_SYS_NETBSD_) || defined(_SYS_OPENBSD_)
+#define nan(TC_a)      strtod("nan", NULL)
+#define nanl(TC_a)     ((long double)strtod("nan", NULL))
+#endif
 
 int _tt_dummyfunc(void);
 int _tt_dummyfuncv(int a, ...);
@@ -249,7 +271,7 @@ int _tt_dummyfuncv(int a, ...);
  *************************************************************************************************/
 
 
-#if TTUSEKQUEUE
+#if defined(TTUSEKQUEUE) || defined(TTUSEEVPORTS)
 
 struct epoll_event {
   uint32_t events;
@@ -273,11 +295,19 @@ enum {
 
 int _tt_epoll_create(int size);
 int _tt_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);
+int _tt_epoll_reassoc(int epfd, int fd);
 int _tt_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout);
 
 #define epoll_create   _tt_epoll_create
 #define epoll_ctl      _tt_epoll_ctl
+#define epoll_reassoc  _tt_epoll_reassoc
 #define epoll_wait     _tt_epoll_wait
+#define epoll_close    close
+
+#else
+
+#define epoll_reassoc(TC_epfd, TC_fd)  0
+#define epoll_close    close
 
 #endif
 

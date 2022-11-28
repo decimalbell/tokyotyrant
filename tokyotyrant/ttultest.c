@@ -1,6 +1,6 @@
 /*************************************************************************************************
  * The test cases of the update log API
- *                                                      Copyright (C) 2006-2008 Mikio Hirabayashi
+ *                                                               Copyright (C) 2006-2010 FAL Labs
  * This file is part of Tokyo Tyrant.
  * Tokyo Tyrant is free software; you can redistribute it and/or modify it under the terms of
  * the GNU Lesser General Public License as published by the Free Software Foundation; either
@@ -101,7 +101,7 @@ static int runwrite(int argc, char **argv){
     if(!base && argv[i][0] == '-'){
       if(!strcmp(argv[i], "-lim")){
         if(++i >= argc) usage();
-        limsiz = strtoll(argv[i], NULL, 10);
+        limsiz = tcatoi(argv[i]);
       } else if(!strcmp(argv[i], "-as")){
         as = true;
       } else {
@@ -116,7 +116,7 @@ static int runwrite(int argc, char **argv){
     }
   }
   if(!base || !rstr) usage();
-  int rnum = atoi(rstr);
+  int rnum = tcatoi(rstr);
   if(rnum < 1) usage();
   int rv = procwrite(base, rnum, limsiz, as);
   return rv;
@@ -132,7 +132,7 @@ static int runread(int argc, char **argv){
     if(!base && argv[i][0] == '-'){
       if(!strcmp(argv[i], "-ts")){
         if(++i >= argc) usage();
-        ts = strtoll(argv[i], NULL, 10);
+        ts = ttstrtots(argv[i]);
       } else if(!strcmp(argv[i], "-pm")){
         pm = true;
       } else {
@@ -161,7 +161,7 @@ static int runthread(int argc, char **argv){
     if(!base && argv[i][0] == '-'){
       if(!strcmp(argv[i], "-lim")){
         if(++i >= argc) usage();
-        limsiz = strtoll(argv[i], NULL, 10);
+        limsiz = tcatoi(argv[i]);
       } else if(!strcmp(argv[i], "-as")){
         as = true;
       } else {
@@ -178,8 +178,8 @@ static int runthread(int argc, char **argv){
     }
   }
   if(!base || !tstr || !rstr) usage();
-  int tnum = atoi(tstr);
-  int rnum = atoi(rstr);
+  int tnum = tcatoi(tstr);
+  int rnum = tcatoi(rstr);
   if(tnum < 1 || rnum < 1) usage();
   int rv = procthread(base, tnum, rnum, limsiz, as);
   return rv;
@@ -201,11 +201,11 @@ static int procwrite(const char *base, int rnum, int64_t limsiz, bool as){
     eprint(ulog, "tculogopen");
     err = true;
   }
-  int pid = getpid();
+  int sid = getpid() & UINT16_MAX;
   for(int i = 1; i <= rnum; i++){
     char buf[RECBUFSIZ];
     int len = sprintf(buf, "%08d", i);
-    if(!tculogwrite(ulog, 0, pid, buf, len)){
+    if(!tculogwrite(ulog, 0, sid, sid, buf, len)){
       eprint(ulog, "tculogwrite");
       err = true;
       break;
@@ -243,11 +243,11 @@ static int procread(const char *base, uint64_t ts, bool pm){
     const char *rbuf;
     int rsiz;
     uint64_t rts;
-    uint32_t rsid;
+    uint32_t rsid, rmid;
     int i = 1;
-    while((rbuf = tculrdread(ulrd, &rsiz, &rts, &rsid)) != NULL){
+    while((rbuf = tculrdread(ulrd, &rsiz, &rts, &rsid, &rmid)) != NULL){
       if(pm){
-        printf("%llu\t%u\t", (unsigned long long)rts, (unsigned int)rsid);
+        printf("%llu\t%u:%u\t", (unsigned long long)rts, (unsigned int)rsid, (unsigned int)rmid);
         for(int i = 0; i < rsiz; i++){
           if(i > 0) putchar(' ');
           printf("%02X", ((unsigned char *)rbuf)[i]);
@@ -286,10 +286,10 @@ static void *threadread(void *targ){
   const char *rbuf;
   int rsiz;
   uint64_t rts;
-  uint32_t rsid;
+  uint32_t rsid, rmid;
   int i = 1;
   while(i <= rnum){
-    while((rbuf = tculrdread(ulrd, &rsiz, &rts, &rsid)) != NULL){
+    while((rbuf = tculrdread(ulrd, &rsiz, &rts, &rsid, &rmid)) != NULL){
       if(id == 0 && rnum > 250 && i % (rnum / 250) == 0){
         putchar('.');
         fflush(stdout);
@@ -297,7 +297,7 @@ static void *threadread(void *targ){
       }
       i++;
     }
-    usleep(1000);
+    tcsleep(0.01);
   }
   return NULL;
 }
@@ -334,16 +334,16 @@ static int procthread(const char *base, int tnum, int rnum, int64_t limsiz, bool
       err = true;
     }
   }
-  int pid = getpid();
+  int sid = getpid() & UINT16_MAX;
   for(int i = 1; i <= rnum; i++){
     char buf[RECBUFSIZ];
     int len = sprintf(buf, "%08d", i);
-    if(!tculogwrite(ulog, 0, pid, buf, len)){
+    if(!tculogwrite(ulog, 0, sid, sid, buf, len)){
       eprint(ulog, "tculogwrite");
       err = true;
       break;
     }
-    if(rnum > 250 && i % (rnum / 10) == 0) usleep(1000 * 10);
+    if(rnum > 250 && i % (rnum / 10) == 0) tcsleep(0.1);
   }
   for(int i = 0; i < tnum; i++){
     if(targs[i].id == -1) continue;

@@ -11,7 +11,7 @@
 SHELL = /bin/sh
 
 # Targets
-MYBINS = tcrdbex
+MYBINS = tcrdbex tcrdbtblex
 
 # Building binaries
 CC = gcc
@@ -57,6 +57,10 @@ clean :
 
 
 tcrdbex : tcrdbex.o
+	$(LDENV) $(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
+
+
+tcrdbtblex : tcrdbtblex.o
 	$(LDENV) $(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(LIBS)
 
 
