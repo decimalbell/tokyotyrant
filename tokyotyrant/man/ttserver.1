@@ -1,0 +1,66 @@
+.TH "TTSERVER" 1 "2008-03-15" "Man Page" "Tokyo Tyrant"
+
+.SH NAME
+ttserver \- the server of Tokyo Tyrant
+
+.SH DESCRIPTION
+.PP
+The command `\fBttserver\fR' runs the server managing a database instance.  Because the database is treated by the abstract API of Tokyo Cabinet, you can choose the scheme on start\-up of the server.  Supported schema are on\-memory database, hash database, and B+ tree database.  This command is used in the following format.  `\fIdbname\fR' specifies the database name.  If it is omitted, on\-memory database is specified.
+.PP
+.RS
+.br
+\fBttserver \fR[\fB\-host \fIname\fB\fR]\fB \fR[\fB\-port \fInum\fB\fR]\fB \fR[\fB\-th\fInum\fB \fInum\fB\fR]\fB \fR[\fB\-tout \fInum\fB\fR]\fB \fR[\fB\-dmn\fR]\fB \fR[\fB\-pid \fIpath\fB\fR]\fB \fR[\fB\-log \fIpath\fB\fR]\fB \fR[\fB\-ld\fR|\fB\-le\fR]\fB \fR[\fB\-ulog \fIpath\fB\fR]\fB \fR[\fB\-ulim \fInum\fB\fR]\fB \fR[\fB\-uas\fR]\fB \fR[\fB\-sid \fInum\fB\fR]\fB \fR[\fB\-mhost \fIname\fB\fR]\fB \fR[\fB\-mport \fInum\fB\fR]\fB \fR[\fB\-rts \fIpath\fB\fR]\fB \fR[\fB\fIdbname\fB\fR]\fB\fR
+.RE
+.PP
+Options feature the following.
+.PP
+.RS
+\fB\-host\fR \fIname\fR : specify the host name or the address of the server.  By default, every network address is bound.
+.br
+\fB\-port\fR \fInum\fR : specify the port number.  By default, it is 1978.
+.br
+\fB\-thnum\fR \fInum\fR : specify the number of worker threads.  By default, it is 5.
+.br
+\fB\-tout\fR \fInum\fR : specify the timeout of each session in seconds.  By default, no timeout is specified.
+.br
+\fB\-dmn\fR : work as a daemon process.
+.br
+\fB\-pid\fR \fIpath\fR : output the process ID into the file.
+.br
+\fB\-log\fR \fIpath\fR : output log messages into the file.
+.br
+\fB\-ld\fR : log debug messages also.
+.br
+\fB\-le\fR : log error messages only.
+.br
+\fB\-ulog\fR \fIpath\fR : specify the update log directory.
+.br
+\fB\-ulim\fR \fInum\fR : specify the limit size of each update log file.
+.br
+\fB\-uas\fR : use asynchronous IO for the update log.
+.br
+\fB\-sid\fR \fInum\fR : specify the server ID.
+.br
+\fB\-mhost\fR \fIname\fR : specify the host name of the replicatoin master server.
+.br
+\fB\-mport\fR \fInum\fR : specify the port number of the replicatoin master server.
+.br
+\fB\-rts\fR \fIpath\fR : specify the replication time stamp file.
+.br
+.RE
+.PP
+To terminate the server normally, send SIGINT or SIGTERM to the process.  It is okay to press Ctrl\-C on the controlling terminal.  To restart the server, send SIGHUP to the process.  If the port number is not more than 0, UNIX domain socket is used and the path of the socket file is specified by the host parameter.  This command returns 0 on success, another on failure.
+.PP
+The naming convention of the database is specified by the abstract API of Tokyo Cabinet.  If the name is "*", the database will be an on\-memory database.  If its suffix is ".tch", the database will be a hash database.  If its suffix is ".tcb", the database will be a B+ tree database.  Otherwise, this function fails.  Tuning parameters can trail the name, separated by "#".  Each parameter is composed of the name and the number, separated by "=".  On\-memory database supports "bnum", "capnum", and "capsiz".  Hash database supports "mode", "bnum", "apow", "fpow", "opts", and "rcnum".  B+ tree database supports "mode", "lmemb", "nmemb", "bnum", "apow", "fpow", "opts", "lcnum", and "ncnum".  "capnum" specifies the capacity number of records.  "capsiz" specifies the capacity size of using memory.  Records spilled the capacity are removed by the storing order.  "mode" should be "w" of writer or "r" of reader.  The default is writer.  "opts" can contains "l" of large option, "d" of Deflate option, and "b" of TCBS option.  For example, "casket.tch#bnum=1000000#opts=ld" means that the name of the database file is "casket.tch", and the bucket number is 1000000, and the options are large and Deflate.
+
+.SH SEE ALSO
+.PP
+.BR ttultest (1),
+.BR ttulmgr (1),
+.BR tcrtest (1),
+.BR tcrmttest (1),
+.BR tcrmgr (1),
+.BR ttutil (3),
+.BR ttulog (3),
+.BR tcrdb (3),
+.BR ttservctl (8)

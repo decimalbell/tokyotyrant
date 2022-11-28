@@ -1,0 +1,170 @@
+2008-07-14  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	* tculog.c (tculogrmtxidx): a bug related to type cast was fixed.
+
+	* ttserver.c (recmtxidx): a bug related to type cast was fixed.
+
+	* ttserver.c (do_putrtt): new function.
+
+	* tcrdb.c (tcrdbputrtt, tcrdbputrtt2): new functions.
+
+	- Release: 0.9.19
+
+2008-07-10  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	* ttserver.c (do_fwmkeys): a bug related to the "max" parameter was fixed.
+
+	- Release: 0.9.18
+
+2008-06-26  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	* tcrdb.c (tcrdbputnr, tcrdbputnr2): new functions.
+
+	* ttserver.c (do_putnr): new functions.
+
+	- Release: 0.9.17
+
+2008-06-17  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	* tculog.c (tculogbegin): hash locking is now supported.
+
+	- Release: 0.9.16
+
+2008-06-14  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	* tculog.c (tculogsetaio): new function.
+
+	* tculog.c (tculogwrite, tculrdread): the system call "aio_write" is now supported.
+
+	- Release: 0.9.15
+
+2008-05-24  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	* ttutil.c, tculog.c, ttserver.c, tcrdb.c: "free" was replaced by "tcfree".
+
+	* ttutil.c (ttsockpfsiz): new function.
+
+	* ttutil.c (tchttpfetch): new function.
+
+	* ttutil.c (ttservdeqtasks): noreply tasks is now supported.
+
+	* ttserver.c (DEFTHNUM): the default number of threads was increased.
+
+	* ttserver.c (do_mc_set, do_mc_add, do_mc_replace, do_mc_delete): "noreply" was added.
+
+	- Release: 0.9.14
+
+2008-03-13  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	* myconf.h: code cleanup.
+
+	- Release: 0.9.13
+
+2008-03-13  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	* ttserver.c (main): "-ln" option was abolished.
+
+	* ttutil.c (ttacceptsock): keep-alive option was added.
+
+	* ttulmgr.c: new file.
+
+	* ttservctl (start): "ulimit -n" is now used.
+
+	- Release: 0.9.12
+
+2008-03-12  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	* ttutil.c (ttservdeqtasks): a bug related to signal handling was fixed.
+
+	- Release: 0.9.11
+
+2008-03-12  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	* ttutil.c (ttopenservsock, ttacceptsock): SO_LINGER option was removed.
+
+	* ttserver.c (main, do_log): logging options were added.
+
+	* ttserver.c (do_stat): file descriptor was to be output.
+
+	* ttrtest.c (runwrite, procwrite, runread, procread): "-cnum" option was added.
+
+	- Release: 0.9.10
+
+2008-03-06  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	* ttserver.c (proc): signal handler options were added.
+
+	- Release: 0.9.9
+
+2008-02-27  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	* ttutil.c (ttservstart, ttservdeqtasks): EPOLLONESHOT is now used.
+
+	* tcrtest.c (runwrite, procwrite): "-rnd" option was added.
+
+	- Release: 0.9.8
+
+2008-02-18  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	* ttutil.c (ttopensockunix, ttopenservsockunix): new functions.
+
+	* ttutil.c (ttservstart): unix domain socket is now suppored.
+
+	* tcrdb.c (tcrdbopen): unix domain socket is now suppored.
+
+	* tcrdb.c (tcrdbfwmkeys, tcrdbfwmkeys2): new functions.
+
+	- Release: 0.9.7
+
+2008-02-08  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	* ttserver.c (do_timed, do_repl): new functions.
+
+	* ttservctl: new file.
+
+	- Release: 0.9.6
+
+2008-02-02  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	* tcrdb.c (tcrdbiterinit, tcrdbiternext): new functions.
+
+	* tcrdb.c (tcrdbrestore): new function.
+
+	- Release: 0.9.5
+
+2008-01-30  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	* tcrdb.c (tcrdbsync, tcrdbcopy): new functions.
+
+	* tcrtest.c (runsync, procsync, runcopy, proccopy): new functions.
+
+	* tculog.c, tcltest.c: new files.
+
+	- Release: 0.9.4
+
+2008-01-25  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	* ttserver.c (do_mget): new function.
+
+	* tcrdb.c (tcrdbget3): new function.
+
+	- Release: 0.9.3
+
+2008-01-24  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	* ttserver.c (do_vsiz, do_http_head, do_http_post): new functions.
+
+	- Release: 0.9.2
+
+2008-01-24  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	* ttserver.c (do_http_get, do_http_put, do_http_delete): new functions.
+
+	- Release: 0.9.1
+
+2008-01-20  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	- The initial version.
+
+	- Release: 0.9.0
+

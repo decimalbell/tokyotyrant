@@ -1,0 +1,184 @@
+# Source of configuration for Tokyo Tyrant
+
+
+
+#================================================================
+# Generic Settings
+#================================================================
+
+# Package name
+AC_INIT(tokyotyrant, 0.9.19)
+
+# Package information
+MYLIBVER=1
+MYLIBREV=15
+MYPROTVER="0.9"
+
+# Targets
+MYHEADERFILES="ttutil.h tculog.h tcrdb.h"
+MYLIBRARYFILES="libtokyotyrant.a"
+MYLIBOBJFILES="ttutil.o tculog.o tcrdb.o myconf.o"
+MYCOMMANDFILES="ttserver ttulmgr ttultest tcrtest tcrmttest tcrmgr"
+MYINITFILES="ttservctl"
+MYMAN1FILES="ttserver.1 ttulmgr.1 ttultest.1 tcrtest.1 tcrmttest.1 tcrmgr.1"
+MYMAN3FILES="ttutil.3 tculog.3 tcrdb.3"
+MYMAN8FILES="ttservctl.8"
+MYDOCUMENTFILES="COPYING ChangeLog THANKS doc"
+MYPCFILES="tokyotyrant.pc"
+
+# Building flags
+MYCFLAGS="-std=c99 -Wall -fPIC -fsigned-char -O2"
+MYCPPFLAGS="-I. -I\$(INCLUDEDIR) -L$HOME/include -L/usr/local/include -DNDEBUG -D_GNU_SOURCE=1"
+MYLDFLAGS="-L. -L\$(LIBDIR) -L$HOME/lib -L/usr/local/lib"
+MYRUNPATH="\$(LIBDIR)"
+MYLDLIBPATHENV="LD_LIBRARY_PATH"
+MYPOSTCMD="true"
+
+# Building paths
+pathtmp="$PATH"
+PATH="$HOME/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin"
+PATH="$PATH:/usr/ccs/bin:/usr/ucb:/usr/xpg4/bin:/usr/xpg6/bin:$pathtmp"
+LIBRARY_PATH="$HOME/lib:/usr/local/lib:$LIBRARY_PATH"
+LD_LIBRARY_PATH="$HOME/lib:/usr/local/lib:$LD_LIBRARY_PATH"
+CPATH="$HOME/include:/usr/local/include:$CPATH"
+PKG_CONFIG_PATH="$HOME/lib/pkgconfig:/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH"
+export PATH LIBRARY_PATH LD_LIBRARY_PATH CPATH PKG_CONFIG_PATH
+if type pkg-config > /dev/null 2>&1
+then
+  PATH="$PATH:`pkg-config --variable=bindir tokyocabinet`"
+  LIBRARY_PATH="$LIBRARY_PATH:`pkg-config --variable=libdir tokyocabinet`"
+  LD_LIBRARY_PATH="$LD_LIBRARY_PATH:`pkg-config --variable=libdir tokyocabinet`"
+  CPATH="$CPATH:`pkg-config --variable=includedir tokyocabinet`"
+  export PATH LIBRARY_PATH LD_LIBRARY_PATH CPATH PKG_CONFIG_PATH
+fi
+
+
+
+#================================================================
+# Options
+#================================================================
+
+
+# Internal variables
+enables=""
+
+# Debug mode
+AC_ARG_ENABLE(debug,
+  AC_HELP_STRING([--enable-debug], [build for debugging]))
+if test "$enable_debug" = "yes"
+then
+  MYCFLAGS="-std=c99 -Wall -fPIC -pedantic -fsigned-char -g"
+  MYCPPFLAGS="$MYCPPFLAGS -UNDEBUG"
+  MYLDFLAGS="$MYLDFLAGS -static"
+  enables="$enables (debug)"
+fi
+
+# Developping mode
+AC_ARG_ENABLE(devel,
+  AC_HELP_STRING([--enable-devel], [build for development]))
+if test "$enable_devel" = "yes"
+then
+  MYCFLAGS="-std=c99 -Wall -fPIC -pedantic -fsigned-char -g -O2 -pipe"
+  MYCPPFLAGS="$MYCPPFLAGS -UNDEBUG"
+  enables="$enables (devel)"
+fi
+
+# Profiling mode
+AC_ARG_ENABLE(profile,
+  AC_HELP_STRING([--enable-profile], [build for profiling]))
+if test "$enable_profile" = "yes"
+then
+  MYCFLAGS="-std=c99 -Wall -fPIC -pedantic -fsigned-char -g -pg -O2 -pipe"
+  enables="$enables (profile)"
+fi
+
+# Disable shared object
+AC_ARG_ENABLE(shared,
+  AC_HELP_STRING([--disable-shared], [avoid to build shared libraries]))
+if test "$enable_shared" = "no"
+then
+  enables="$enables (no-shared)"
+fi
+
+# Messages
+printf '#================================================================\n'
+printf '# Configuring Tokyo Tyrant version %s%s.\n' "$PACKAGE_VERSION" "$enables"
+printf '#================================================================\n'
+
+
+
+#================================================================
+# Checking Commands and Libraries
+#================================================================
+
+# C compiler
+AC_PROG_CC
+
+# Byte order
+AC_C_BIGENDIAN(MYCPPFLAGS="$MYCPPFLAGS -D_MYBIGEND")
+
+# Underlying libraries
+AC_CHECK_LIB(c, main)
+AC_CHECK_LIB(m, main)
+AC_CHECK_LIB(rt, main)
+AC_CHECK_LIB(pthread, main)
+AC_CHECK_LIB(nsl, main)
+AC_CHECK_LIB(socket, main)
+AC_CHECK_LIB(resolv, main)
+AC_CHECK_LIB(z, main)
+AC_CHECK_LIB(tokyocabinet, main)
+
+# Shared libraries
+if test "$enable_shared" != "no" && test "$enable_profile" != "yes"
+then
+  if uname | grep Darwin >/dev/null
+  then
+    MYLIBRARYFILES="$MYLIBRARYFILES libtokyotyrant.$MYLIBVER.$MYLIBREV.0.dylib"
+    MYLIBRARYFILES="$MYLIBRARYFILES libtokyotyrant.$MYLIBVER.dylib"
+    MYLIBRARYFILES="$MYLIBRARYFILES libtokyotyrant.dylib"
+    MYLDLIBPATHENV="DYLD_LIBRARY_PATH"
+  else
+    MYLIBRARYFILES="$MYLIBRARYFILES libtokyotyrant.so.$MYLIBVER.$MYLIBREV.0"
+    MYLIBRARYFILES="$MYLIBRARYFILES libtokyotyrant.so.$MYLIBVER"
+    MYLIBRARYFILES="$MYLIBRARYFILES libtokyotyrant.so"
+  fi
+fi
+
+
+
+#================================================================
+# Generic Settings
+#================================================================
+
+# Export variables
+AC_SUBST(MYLIBVER)
+AC_SUBST(MYLIBREV)
+AC_SUBST(MYPROTVER)
+AC_SUBST(MYHEADERFILES)
+AC_SUBST(MYLIBRARYFILES)
+AC_SUBST(MYLIBOBJFILES)
+AC_SUBST(MYCOMMANDFILES)
+AC_SUBST(MYINITFILES)
+AC_SUBST(MYMAN1FILES)
+AC_SUBST(MYMAN3FILES)
+AC_SUBST(MYMAN8FILES)
+AC_SUBST(MYDOCUMENTFILES)
+AC_SUBST(MYPCFILES)
+AC_SUBST(MYCFLAGS)
+AC_SUBST(MYCPPFLAGS)
+AC_SUBST(MYLDFLAGS)
+AC_SUBST(MYRUNPATH)
+AC_SUBST(MYLDLIBPATHENV)
+AC_SUBST(MYPOSTCMD)
+
+# Targets
+AC_OUTPUT(Makefile tokyotyrant.pc)
+
+# Messages
+printf '#================================================================\n'
+printf '# Ready to make.\n'
+printf '#================================================================\n'
+
+
+
+# END OF FILE
