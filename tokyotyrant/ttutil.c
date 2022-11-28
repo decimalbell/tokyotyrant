@@ -26,6 +26,7 @@
 #define SOCKPATHBUFSIZ 108               // size of a socket path buffer
 #define HTTPLINEBUFSIZ 2048              // size of a line buffer of HTTP
 #define HTTPBODYMAXSIZ (256*1024*1024)   // maximum size of the entity body of HTTP
+#define TRILLIONNUM    1000000000000     // trillion number
 
 
 /* String containing the version information. */
@@ -204,8 +205,8 @@ int ttacceptsockunix(int fd){
 bool ttclosesock(int fd){
   assert(fd >= 0);
   bool err = false;
-  if(shutdown(fd, 2) != 0 && errno != ENOTCONN) err = true;
-  if(close(fd) != 0) err = true;
+  if(shutdown(fd, 2) != 0 && errno != ENOTCONN && errno != ECONNRESET) err = true;
+  if(close(fd) != 0 && errno != ENOTCONN && errno != ECONNRESET) err = true;
   return !err;
 }
 
@@ -643,6 +644,44 @@ int tthttpfetch(const char *url, TCMAP *reqheads, TCMAP *resheads, TCXSTR *resbo
   }
   pthread_cleanup_pop(1);
   return code;
+}
+
+
+/* Serialize a real number. */
+void ttpackdouble(double num, char *buf){
+  assert(buf);
+  double dinteg, dfract;
+  dfract = modf(num, &dinteg);
+  int64_t linteg, lfract;
+  if(isnormal(dinteg)){
+    linteg = dinteg;
+    lfract = dfract * TRILLIONNUM;
+  } else if(isinf(dinteg)){
+    linteg = dinteg > 0 ? INT64_MAX : INT64_MIN;
+    lfract = 0;
+  } else {
+    linteg = INT64_MIN;
+    lfract = INT64_MIN;
+  }
+  memcpy(buf, &linteg, sizeof(linteg));
+  memcpy(buf + sizeof(linteg), &lfract, sizeof(lfract));
+}
+
+
+/* Redintegrate a serialized real number. */
+double ttunpackdouble(const char *buf){
+  assert(buf);
+  int64_t linteg, lfract;
+  memcpy(&linteg, buf, sizeof(linteg));
+  memcpy(&lfract, buf + sizeof(linteg), sizeof(lfract));
+  if(lfract == INT64_MIN && linteg == INT64_MIN){
+    return NAN;
+  } else if(linteg == INT64_MAX){
+    return INFINITY;
+  } else if(linteg == INT64_MIN){
+    return -INFINITY;
+  }
+  return linteg + (double)lfract / TRILLIONNUM;
 }
 
 

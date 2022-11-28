@@ -1,3 +1,17 @@
+2008-09-05  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	* ttutil.c (ttpackdouble, ttunpackdouble): new functions.
+
+	* tcrdb.c (tcrdbaddint, tcrdbadddouble): new functions.
+
+	- Release: 1.0.1
+
+2008-07-29  Mikio Hirabayashi  <mikio@users.sourceforge.net>
+
+	* myconf.c (_tt_epoll_create, _tt_epoll_ctl, _tt_epoll_wait): new functions.
+
+	- Release: 1.0.0
+
 2008-07-14  Mikio Hirabayashi  <mikio@users.sourceforge.net>
 
 	* tculog.c (tculogrmtxidx): a bug related to type cast was fixed.

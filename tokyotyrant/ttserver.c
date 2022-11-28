@@ -88,6 +88,8 @@ static void do_vsiz(TTSOCK *sock, TASKARG *arg, TTREQ *req);
 static void do_iterinit(TTSOCK *sock, TASKARG *arg, TTREQ *req);
 static void do_iternext(TTSOCK *sock, TASKARG *arg, TTREQ *req);
 static void do_fwmkeys(TTSOCK *sock, TASKARG *arg, TTREQ *req);
+static void do_addint(TTSOCK *sock, TASKARG *arg, TTREQ *req);
+static void do_adddouble(TTSOCK *sock, TASKARG *arg, TTREQ *req);
 static void do_sync(TTSOCK *sock, TASKARG *arg, TTREQ *req);
 static void do_vanish(TTSOCK *sock, TASKARG *arg, TTREQ *req);
 static void do_copy(TTSOCK *sock, TASKARG *arg, TTREQ *req);
@@ -166,15 +168,7 @@ int main(int argc, char **argv){
         ulogpath = argv[i];
       } else if(!strcmp(argv[i], "-ulim")){
         if(++i >= argc) usage();
-        char *suffix;
-        ulim = strtoll(argv[i], &suffix, 10);
-        if(*suffix == 'k' || *suffix == 'K'){
-          ulim *= 1024LL;
-        } else if(*suffix == 'm' || *suffix == 'M'){
-          ulim *= 1024LL * 1024LL;
-        } else if(*suffix == 'g' || *suffix == 'G'){
-          ulim *= 1024LL * 1024LL * 1024LL;
-        }
+        ulim = tcatoi(argv[i]);
       } else if(!strcmp(argv[i], "-uas")){
         uas = true;
       } else if(!strcmp(argv[i], "-sid")){
@@ -529,6 +523,12 @@ static void do_task(TTSOCK *sock, void *opq, TTREQ *req){
       break;
     case TTCMDFWMKEYS:
       do_fwmkeys(sock, arg, req);
+      break;
+    case TTCMDADDINT:
+      do_addint(sock, arg, req);
+      break;
+    case TTCMDADDDOUBLE:
+      do_adddouble(sock, arg, req);
       break;
     case TTCMDSYNC:
       do_sync(sock, arg, req);
@@ -1105,6 +1105,86 @@ static void do_fwmkeys(TTSOCK *sock, TASKARG *arg, TTREQ *req){
     pthread_cleanup_pop(1);
   } else {
     ttservlog(g_serv, TTLOGINFO, "do_fwmkeys: invalid entity");
+  }
+  pthread_cleanup_pop(1);
+}
+
+
+/* handle the addint command */
+static void do_addint(TTSOCK *sock, TASKARG *arg, TTREQ *req){
+  ttservlog(g_serv, TTLOGDEBUG, "doing addint command");
+  TCADB *adb = arg->adb;
+  int ksiz = ttsockgetint32(sock);
+  int anum = ttsockgetint32(sock);
+  if(ttsockcheckend(sock) || ksiz < 0){
+    ttservlog(g_serv, TTLOGINFO, "do_addint: invalid parameters");
+    return;
+  }
+  char stack[TTIOBUFSIZ];
+  char *buf = (ksiz < TTIOBUFSIZ) ? stack : tcmalloc(ksiz + 1);
+  pthread_cleanup_push(free, (buf == stack) ? NULL : buf);
+  if(ttsockrecv(sock, buf, ksiz) && !ttsockcheckend(sock)){
+    int snum = tcadbaddint(adb, buf, ksiz, anum);
+    if(snum != INT_MIN){
+      *stack = 0;
+      uint32_t num;
+      num = TTHTONL((uint32_t)snum);
+      memcpy(stack + sizeof(uint8_t), &num, sizeof(uint32_t));
+      if(ttsocksend(sock, stack, sizeof(uint8_t) + sizeof(uint32_t))){
+        req->keep = true;
+      } else {
+        ttservlog(g_serv, TTLOGINFO, "do_addint: response failed");
+      }
+    } else {
+      uint8_t code = 1;
+      if(ttsocksend(sock, &code, sizeof(code))){
+        req->keep = true;
+      } else {
+        ttservlog(g_serv, TTLOGINFO, "do_addint: response failed");
+      }
+    }
+  } else {
+    ttservlog(g_serv, TTLOGINFO, "do_addint: invalid entity");
+  }
+  pthread_cleanup_pop(1);
+}
+
+
+/* handle the adddouble command */
+static void do_adddouble(TTSOCK *sock, TASKARG *arg, TTREQ *req){
+  ttservlog(g_serv, TTLOGDEBUG, "doing adddouble command");
+  TCADB *adb = arg->adb;
+  int ksiz = ttsockgetint32(sock);
+  char abuf[sizeof(uint64_t)*2];
+  if(!ttsockrecv(sock, abuf, sizeof(abuf)) || ttsockcheckend(sock) || ksiz < 0){
+    ttservlog(g_serv, TTLOGINFO, "do_adddouble: invalid parameters");
+    return;
+  }
+  double anum = ttunpackdouble(abuf);
+  char stack[TTIOBUFSIZ];
+  char *buf = (ksiz < TTIOBUFSIZ) ? stack : tcmalloc(ksiz + 1);
+  pthread_cleanup_push(free, (buf == stack) ? NULL : buf);
+  if(ttsockrecv(sock, buf, ksiz) && !ttsockcheckend(sock)){
+    double snum = tcadbadddouble(adb, buf, ksiz, anum);
+    if(!isnan(snum)){
+      *stack = 0;
+      ttpackdouble(snum, abuf);
+      memcpy(stack + sizeof(uint8_t), abuf, sizeof(abuf));
+      if(ttsocksend(sock, stack, sizeof(uint8_t) + sizeof(abuf))){
+        req->keep = true;
+      } else {
+        ttservlog(g_serv, TTLOGINFO, "do_adddouble: response failed");
+      }
+    } else {
+      uint8_t code = 1;
+      if(ttsocksend(sock, &code, sizeof(code))){
+        req->keep = true;
+      } else {
+        ttservlog(g_serv, TTLOGINFO, "do_adddouble: response failed");
+      }
+    }
+  } else {
+    ttservlog(g_serv, TTLOGINFO, "do_adddouble: invalid entity");
   }
   pthread_cleanup_pop(1);
 }

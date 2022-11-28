@@ -220,6 +220,20 @@ int ttsockcheckpfsiz(TTSOCK *sock);
 int tthttpfetch(const char *url, TCMAP *reqheads, TCMAP *resheads, TCXSTR *resbody);
 
 
+/* Serialize a real number.
+   `num' specifies a real number.
+   `buf' specifies the pointer to the region into which the result is written.  The size of the
+   buffer should be 16 bytes. */
+void ttpackdouble(double num, char *buf);
+
+
+/* Redintegrate a serialized real number.
+   `buf' specifies the pointer to the region of the serialized real number.  The size of the
+   buffer should be 16 bytes.
+   The return value is the original real number. */
+double ttunpackdouble(const char *buf);
+
+
 
 /*************************************************************************************************
  * server utilities
@@ -239,6 +253,8 @@ int tthttpfetch(const char *url, TCMAP *reqheads, TCMAP *resheads, TCXSTR *resbo
 #define TTCMDITERINIT  0x50              /* ID of iterinit command */
 #define TTCMDITERNEXT  0x51              /* ID of iternext command */
 #define TTCMDFWMKEYS   0x58              /* ID of fwmkeys command */
+#define TTCMDADDINT    0x60              /* ID of addint command */
+#define TTCMDADDDOUBLE 0x61              /* ID of adddouble command */
 #define TTCMDSYNC      0x70              /* ID of sync command */
 #define TTCMDVANISH    0x71              /* ID of vanish command */
 #define TTCMDCOPY      0x72              /* ID of copy command */
@@ -378,8 +394,8 @@ bool ttserviskilled(TTSERV *serv);
  *************************************************************************************************/
 
 
-#define _TT_VERSION    "0.9.19"
-#define _TT_LIBVER     115
+#define _TT_VERSION    "1.0.1"
+#define _TT_LIBVER     117
 #define _TT_PROTVER    "0.9"
 
 

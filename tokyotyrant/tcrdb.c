@@ -704,6 +704,92 @@ TCLIST *tcrdbfwmkeys2(TCRDB *rdb, const char *pstr, int max){
 }
 
 
+/* Add an integer to a record in a remote database object. */
+int tcrdbaddint(TCRDB *rdb, const void *kbuf, int ksiz, int num){
+  assert(rdb && kbuf && ksiz >= 0);
+  if(rdb->fd < 0){
+    rdb->ecode = TTEINVALID;
+    return false;
+  }
+  int sum = INT_MIN;
+  int rsiz = 2 + sizeof(uint32_t) * 2 + ksiz;
+  unsigned char stack[TTIOBUFSIZ];
+  unsigned char *buf = (rsiz < TTIOBUFSIZ) ? stack : tcmalloc(rsiz);
+  pthread_cleanup_push(free, (buf == stack) ? NULL : buf);
+  unsigned char *wp = buf;
+  *(wp++) = TTMAGICNUM;
+  *(wp++) = TTCMDADDINT;
+  uint32_t lnum;
+  lnum = TTHTONL((uint32_t)ksiz);
+  memcpy(wp, &lnum, sizeof(uint32_t));
+  wp += sizeof(uint32_t);
+  lnum = TTHTONL((uint32_t)num);
+  memcpy(wp, &lnum, sizeof(uint32_t));
+  wp += sizeof(uint32_t);
+  memcpy(wp, kbuf, ksiz);
+  wp += ksiz;
+  if(ttsocksend(rdb->sock, buf, wp - buf)){
+    int code = ttsockgetc(rdb->sock);
+    if(code == 0){
+      sum = ttsockgetint32(rdb->sock);
+      if(ttsockcheckend(rdb->sock)){
+        rdb->ecode = TTERECV;
+        sum = -1;
+      }
+    } else {
+      rdb->ecode = (code == -1) ? TTERECV : TTEKEEP;
+    }
+  } else {
+    rdb->ecode = TTESEND;
+  }
+  pthread_cleanup_pop(1);
+  return sum;
+}
+
+
+/* Add a real number to a record in a remote database object. */
+double tcrdbadddouble(TCRDB *rdb, const void *kbuf, int ksiz, double num){
+  assert(rdb && kbuf && ksiz >= 0);
+  if(rdb->fd < 0){
+    rdb->ecode = TTEINVALID;
+    return false;
+  }
+  double sum = NAN;
+  int rsiz = 2 + sizeof(uint32_t) + sizeof(uint64_t) * 2 + ksiz;
+  unsigned char stack[TTIOBUFSIZ];
+  unsigned char *buf = (rsiz < TTIOBUFSIZ) ? stack : tcmalloc(rsiz);
+  pthread_cleanup_push(free, (buf == stack) ? NULL : buf);
+  unsigned char *wp = buf;
+  *(wp++) = TTMAGICNUM;
+  *(wp++) = TTCMDADDDOUBLE;
+  uint32_t lnum;
+  lnum = TTHTONL((uint32_t)ksiz);
+  memcpy(wp, &lnum, sizeof(uint32_t));
+  wp += sizeof(uint32_t);
+  char dbuf[sizeof(uint64_t)*2];
+  ttpackdouble(num, (char *)wp);
+  wp += sizeof(dbuf);
+  memcpy(wp, kbuf, ksiz);
+  wp += ksiz;
+  if(ttsocksend(rdb->sock, buf, wp - buf)){
+    int code = ttsockgetc(rdb->sock);
+    if(code == 0){
+      if(ttsockrecv(rdb->sock, dbuf, sizeof(dbuf)) && !ttsockcheckend(rdb->sock)){
+        sum = ttunpackdouble(dbuf);
+      } else {
+        rdb->ecode = TTERECV;
+      }
+    } else {
+      rdb->ecode = (code == -1) ? TTERECV : TTEKEEP;
+    }
+  } else {
+    rdb->ecode = TTESEND;
+  }
+  pthread_cleanup_pop(1);
+  return sum;
+}
+
+
 /* Synchronize updated contents of a remote database object with the file and the device. */
 bool tcrdbsync(TCRDB *rdb){
   assert(rdb);

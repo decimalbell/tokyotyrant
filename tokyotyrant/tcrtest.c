@@ -40,7 +40,7 @@ static int runwicked(int argc, char **argv);
 static int procwrite(const char *host, int port, int cnum, int rnum, bool nr, bool rnd);
 static int procread(const char *host, int port, int cnum, int mul, bool rnd);
 static int procremove(const char *host, int port, int cnum, bool rnd);
-static int procrcat(const char *host, int port, int cnum, int rnum, int rtt);
+static int procrcat(const char *host, int port, int cnum, int rnum, int rtt, bool dai, bool dad);
 static int procmisc(const char *host, int port, int cnum, int rnum);
 static int procwicked(const char *host, int port, int cnum, int rnum);
 
@@ -78,7 +78,8 @@ static void usage(void){
   fprintf(stderr, "  %s write [-port num] [-cnum num] [-nr] [-rnd] host rnum\n", g_progname);
   fprintf(stderr, "  %s read [-port num] [-cnum num] [-mul num] [-rnd] host\n", g_progname);
   fprintf(stderr, "  %s remove [-port num] [-cnum num] [-rnd] host\n", g_progname);
-  fprintf(stderr, "  %s rcat [-port num] [-cnum num] [-rtt num] host rnum\n", g_progname);
+  fprintf(stderr, "  %s rcat [-port num] [-cnum num] [-rtt num] [-dai|-dad] host rnum\n",
+          g_progname);
   fprintf(stderr, "  %s misc [-port num] [-cnum num] host rnum\n", g_progname);
   fprintf(stderr, "  %s wicked [-port num] [-cnum num] host rnum\n", g_progname);
   fprintf(stderr, "\n");
@@ -221,6 +222,8 @@ static int runrcat(int argc, char **argv){
   int port = DEFPORT;
   int cnum = 1;
   int rtt = 0;
+  bool dai = false;
+  bool dad = false;
   for(int i = 2; i < argc; i++){
     if(!host && argv[i][0] == '-'){
       if(!strcmp(argv[i], "-port")){
@@ -232,6 +235,10 @@ static int runrcat(int argc, char **argv){
       } else if(!strcmp(argv[i], "-rtt")){
         if(++i >= argc) usage();
         rtt = atoi(argv[i]);
+      } else if(!strcmp(argv[i], "-dai")){
+        dai = true;
+      } else if(!strcmp(argv[i], "-dad")){
+        dad = true;
       } else {
         usage();
       }
@@ -246,7 +253,7 @@ static int runrcat(int argc, char **argv){
   if(!host || !rstr || cnum < 1) usage();
   int rnum = atoi(rstr);
   if(rnum < 1) usage();
-  int rv = procrcat(host, port, cnum, rnum, rtt);
+  int rv = procrcat(host, port, cnum, rnum, rtt, dai, dad);
   return rv;
 }
 
@@ -484,9 +491,9 @@ static int procremove(const char *host, int port, int cnum, bool rnd){
 
 
 /* perform rcat command */
-static int procrcat(const char *host, int port, int cnum, int rnum, int rtt){
-  iprintf("<Random Concatenating Test>\n  host=%s  port=%d  cnum=%d  rnum=%d  rtt=%d\n\n",
-          host, port, cnum, rnum, rtt);
+static int procrcat(const char *host, int port, int cnum, int rnum, int rtt, bool dai, bool dad){
+  iprintf("<Random Concatenating Test>\n  host=%s  port=%d  cnum=%d  rnum=%d"
+          "  rtt=%d  dai=%d  dad=%d\n\n", host, port, cnum, rnum, rtt, dai, dad);
   int pnum = rnum / 5 + 1;
   bool err = false;
   double stime = tctime();
@@ -505,6 +512,18 @@ static int procrcat(const char *host, int port, int cnum, int rnum, int rtt){
     if(rtt > 0){
       if(!tcrdbputrtt(rdb, kbuf, ksiz, kbuf, ksiz, rtt)){
         eprint(rdb, "tcrdbputrtt");
+        err = true;
+        break;
+      }
+    } else if(dai){
+      if(tcrdbaddint(rdb, kbuf, ksiz, 1) == INT_MIN){
+        eprint(rdb, "tcrdbaddint");
+        err = true;
+        break;
+      }
+    } else if(dad){
+      if(isnan(tcrdbadddouble(rdb, kbuf, ksiz, 1.0))){
+        eprint(rdb, "tcrdbadddouble");
         err = true;
         break;
       }

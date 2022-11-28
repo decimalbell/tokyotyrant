@@ -34,4 +34,68 @@ int _tt_dummyfuncv(int a, ...){
 
 
 
+/*************************************************************************************************
+ * epoll emulation
+ *************************************************************************************************/
+
+
+#if TTUSEKQUEUE
+
+
+#include <sys/event.h>
+
+
+int _tt_epoll_create(int size){
+  return kqueue();
+}
+
+
+int _tt_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event){
+  if(op == EPOLL_CTL_ADD){
+    struct kevent kev;
+    int kfilt = 0;
+    if(event->events & EPOLLIN) kfilt |= EVFILT_READ;
+    if(event->events & EPOLLOUT) kfilt |= EVFILT_WRITE;
+    int kflags = EV_ADD;
+    if(event->events & EPOLLONESHOT) kflags |= EV_ONESHOT;
+    EV_SET(&kev, fd, kfilt, kflags, 0, 0, NULL);
+    return kevent(epfd, &kev, 1, NULL, 0, NULL) != -1 ? 0 : -1;
+  } else if(op == EPOLL_CTL_MOD){
+    struct kevent kev;
+    int kfilt = 0;
+    if(event->events & EPOLLIN) kfilt |= EVFILT_READ;
+    if(event->events & EPOLLOUT) kfilt |= EVFILT_WRITE;
+    int kflags = EV_ADD;
+    if(event->events & EPOLLONESHOT) kflags |= EV_ONESHOT;
+    EV_SET(&kev, fd, kfilt, kflags, 0, 0, NULL);
+    return kevent(epfd, &kev, 1, NULL, 0, NULL) != -1 ? 0 : -1;
+  } else if(op == EPOLL_CTL_DEL){
+    struct kevent kev;
+    int kfilt = EVFILT_READ | EVFILT_WRITE;
+    EV_SET(&kev, fd, kfilt, EV_DELETE, 0, 0, NULL);
+    return kevent(epfd, &kev, 1, NULL, 0, NULL) != -1 || errno == ENOENT ? 0 : -1;
+  }
+  return -1;
+}
+
+
+int _tt_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout){
+  div_t td = div(timeout, 1000);
+  struct timespec ts;
+  ts.tv_sec = td.quot;
+  ts.tv_nsec = td.rem * 1000000;
+  struct kevent kevs[maxevents];
+  int num = kevent(epfd, NULL, 0, kevs, maxevents, &ts);
+  if(num == -1) return -1;
+  for(int i = 0; i < num; i++){
+    events[i].data.fd = kevs[i].ident;
+  }
+  return num;
+}
+
+
+#endif
+
+
+
 // END OF FILE

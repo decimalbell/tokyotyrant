@@ -325,6 +325,28 @@ TCLIST *tcrdbfwmkeys(TCRDB *rdb, const void *pbuf, int psiz, int max);
 TCLIST *tcrdbfwmkeys2(TCRDB *rdb, const char *pstr, int max);
 
 
+/* Add an integer to a record in a remote database object.
+   `rdb' specifies the remote database object connected as a writer.
+   `kbuf' specifies the pointer to the region of the key.
+   `ksiz' specifies the size of the region of the key.
+   `num' specifies the additional value.
+   If successful, the return value is the summation value, else, it is `INT_MIN'.
+   If the corresponding record exists, the value is treated as an integer and is added to.  If no
+   record corresponds, a new record of the additional value is stored. */
+int tcrdbaddint(TCRDB *rdb, const void *kbuf, int ksiz, int num);
+
+
+/* Add a real number to a record in a remote database object.
+   `rdb' specifies the remote database object connected as a writer.
+   `kbuf' specifies the pointer to the region of the key.
+   `ksiz' specifies the size of the region of the key.
+   `num' specifies the additional value.
+   If successful, the return value is the summation value, else, it is `NAN'.
+   If the corresponding record exists, the value is treated as a real number and is added to.  If
+   no record corresponds, a new record of the additional value is stored. */
+double tcrdbadddouble(TCRDB *rdb, const void *kbuf, int ksiz, double num);
+
+
 /* Synchronize updated contents of a remote database object with the file and the device.
    `rdb' specifies the remote database object.
    If successful, the return value is true, else, it is false.

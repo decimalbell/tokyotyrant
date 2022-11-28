@@ -7,11 +7,11 @@
 #================================================================
 
 # Package name
-AC_INIT(tokyotyrant, 0.9.19)
+AC_INIT(tokyotyrant, 1.0.1)
 
 # Package information
 MYLIBVER=1
-MYLIBREV=15
+MYLIBREV=17
 MYPROTVER="0.9"
 
 # Targets
@@ -127,6 +127,13 @@ AC_CHECK_LIB(socket, main)
 AC_CHECK_LIB(resolv, main)
 AC_CHECK_LIB(z, main)
 AC_CHECK_LIB(tokyocabinet, main)
+
+# Necessary headers
+AC_CHECK_HEADER(stdlib.h, true, AC_MSG_ERROR(stdlib.h is required))
+AC_CHECK_HEADER(stdint.h, true, AC_MSG_ERROR(stdint.h is required))
+AC_CHECK_HEADER(unistd.h, true, AC_MSG_ERROR(unistd.h is required))
+AC_CHECK_HEADER(pthread.h, true, AC_MSG_ERROR(pthread.h is required))
+AC_CHECK_HEADER(tcutil.h, true, AC_MSG_ERROR(tcutil.h is required))
 
 # Shared libraries
 if test "$enable_shared" != "no" && test "$enable_profile" != "yes"

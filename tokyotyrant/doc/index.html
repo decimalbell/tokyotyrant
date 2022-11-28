@@ -166,7 +166,7 @@ var {
 <h1 id="headline">Tokyo Tyrant: network interface of Tokyo Cabinet</h1>
 
 <div class="note">Copyright (C) 2007-2008 Mikio Hirabayashi</div>
-<div class="note">Last Update: Sat, 15 Mar 2008 16:29:20 +0900</div>
+<div class="note">Last Update: Wed, 30 Jul 2008 16:31:42 +0900</div>
 
 <hr />
 
@@ -189,9 +189,9 @@ var {
 
 <p>Tokyo Tyrant is a package of network interface to the DBM called Tokyo Cabinet.  Though the DBM has high performance, you might bother in case that multiple processes share the same database, or remote processes access the database.  Thus, Tokyo Tyrant is provided for concurrent and remote connections to Tokyo Cabinet.  It is composed of the server process managing a database and its access library for client applications.</p>
 
-<p>The server features high concurrency due to thread-pool modeled implementation and the "epoll" mechanism of the modern Linux kernel.  The server and its clients communicate with each other by simple binary protocol on TCP/IP.  Protocols compatible with memcached and HTTP/1.1 are also supported so that almost all principal platforms and programming languages can use Tokyo Tyrant.  High availability and high integrity are also featured due to hot such mechanisms as hot backup, update logging, and replication.</p>
+<p>The server features high concurrency due to thread-pool modeled implementation and the epoll/kqueue mechanism of the modern Linux/*BSD kernel.  The server and its clients communicate with each other by simple binary protocol on TCP/IP.  Protocols compatible with memcached and HTTP/1.1 are also supported so that almost all principal platforms and programming languages can use Tokyo Tyrant.  High availability and high integrity are also featured due to hot such mechanisms as hot backup, update logging, and replication.</p>
 
-<p><em>As for now, the server works on Linux only.</em></p>
+<p><em>As for now, the server works on Linux, FreeBSD, Mac OS X only.</em></p>
 
 <hr />
 
@@ -222,7 +222,7 @@ var {
 /usr/local/include/tculog.h
 /usr/local/include/tcrdb.h
 /usr/local/lib/libtokyotyrant.a
-/usr/local/lib/libtokyotyrant.so.1.15.0
+/usr/local/lib/libtokyotyrant.so.1.17.0
 /usr/local/lib/libtokyotyrant.so.1
 /usr/local/lib/libtokyotyrant.so
 /usr/local/lib/pkgconfig/tokyotyrant.pc
@@ -274,7 +274,7 @@ var {
 <li><code>-le</code> : log error messages only.</li>
 <li><code>-ulog <var>path</var></code> : specify the update log directory.</li>
 <li><code>-ulim <var>num</var></code> : specify the limit size of each update log file.</li>
-<li><code>-uas</code> : use asynchronous IO for the update log.</li>
+<li><code>-uas</code> : use asynchronous I/O for the update log.</li>
 <li><code>-sid <var>num</var></code> : specify the server ID.</li>
 <li><code>-mhost <var>name</var></code> : specify the host name of the replication master server.</li>
 <li><code>-mport <var>num</var></code> : specify the port number of the replication master server.</li>
@@ -283,7 +283,7 @@ var {
 
 <p>To terminate the server normally, send SIGINT or SIGTERM to the process.  It is okay to press Ctrl-C on the controlling terminal.  To restart the server, send SIGHUP to the process.  If the port number is not more than 0, UNIX domain socket is used and the path of the socket file is specified by the host parameter.  This command returns 0 on success, another on failure.</p>
 
-<p>The naming convention of the database is specified by the abstract API of Tokyo Cabinet.  If the name is "*", the database will be an on-memory database.  If its suffix is ".tch", the database will be a hash database.  If its suffix is ".tcb", the database will be a B+ tree database.  If its suffix is ".tcf", the database will be a fixed-length database.  Otherwise, this function fails.  Tuning parameters can trail the name, separated by "#".  Each parameter is composed of the name and the number, separated by "=".  On-memory database supports "bnum", "capnum", and "capsiz".  Hash database supports "mode", "bnum", "apow", "fpow", "opts", and "rcnum".  B+ tree database supports "mode", "lmemb", "nmemb", "bnum", "apow", "fpow", "opts", "lcnum", and "ncnum".  Fixed-length database supports "mode", "width", and "limsiz".  "capnum" specifies the capacity number of records.  "capsiz" specifies the capacity size of using memory.  Records spilled the capacity are removed by the storing order.  "mode" can contain "w" of writer, "r" of reader, "c" of creating, "t" of truncating, "e" of no locking, and "f" of non-blocking lock.  The default mode is relevant to "wc".  "opts" can contains "l" of large option, "d" of Deflate option, and "b" of TCBS option.  "width" specifies the width of the value of each record.  "limsiz" specifies the limit size of the database file.  For example, "casket.tch#bnum=1000000#opts=ld" means that the name of the database file is "casket.tch", and the bucket number is 1000000, and the options are large and Deflate.</p>
+<p>The naming convention of the database is specified by the abstract API of Tokyo Cabinet.  If the name is "*", the database will be an on-memory database.  If its suffix is ".tch", the database will be a hash database.  If its suffix is ".tcb", the database will be a B+ tree database.  If its suffix is ".tcf", the database will be a fixed-length database.  Otherwise, this function fails.  Tuning parameters can trail the name, separated by "#".  Each parameter is composed of the name and the number, separated by "=".  On-memory database supports "bnum", "capnum", and "capsiz".  Hash database supports "mode", "bnum", "apow", "fpow", "opts", "rcnum", and "xmsiz".  B+ tree database supports "mode", "lmemb", "nmemb", "bnum", "apow", "fpow", "opts", "lcnum", "ncnum", and "xmsiz".  Fixed-length database supports "mode", "width", and "limsiz".  "capnum" specifies the capacity number of records.  "capsiz" specifies the capacity size of using memory.  Records spilled the capacity are removed by the storing order.  "mode" can contain "w" of writer, "r" of reader, "c" of creating, "t" of truncating, "e" of no locking, and "f" of non-blocking lock.  The default mode is relevant to "wc".  "opts" can contains "l" of large option, "d" of Deflate option, "b" of BZIP2 option, and "t" of TCBS option.  For example, "casket.tch#bnum=1000000#opts=ld" means that the name of the database file is "casket.tch", and the bucket number is 1000000, and the options are large and Deflate.</p>
 
 <h3>ttservctl</h3>
 
@@ -756,6 +756,30 @@ var {
 <dd>Because the object of the return value is created with the function `tclistnew', it should be deleted with the function `tclistdel' when it is no longer in use.</dd>
 </dl>
 
+<p>The function `tcrdbaddint' is used in order to add an integer to a record in a remote database object.</p>
+
+<dl class="api">
+<dt><code>int tcrdbaddint(TCRDB *<var>rdb</var>, const void *<var>kbuf</var>, int <var>ksiz</var>, int <var>num</var>);</code></dt>
+<dd>`<var>rdb</var>' specifies the remote database object connected as a writer.</dd>
+<dd>`<var>kbuf</var>' specifies the pointer to the region of the key.</dd>
+<dd>`<var>ksiz</var>' specifies the size of the region of the key.</dd>
+<dd>`<var>num</var>' specifies the additional value.</dd>
+<dd>If successful, the return value is the summation value, else, it is `INT_MIN'.</dd>
+<dd>If the corresponding record exists, the value is treated as an integer and is added to.  If no record corresponds, a new record of the additional value is stored.</dd>
+</dl>
+
+<p>The function `tcrdbadddouble' is used in order to add a real number to a record in a remote database object.</p>
+
+<dl class="api">
+<dt><code>double tcrdbadddouble(TCRDB *<var>rdb</var>, const void *<var>kbuf</var>, int <var>ksiz</var>, double <var>num</var>);</code></dt>
+<dd>`<var>rdb</var>' specifies the remote database object connected as a writer.</dd>
+<dd>`<var>kbuf</var>' specifies the pointer to the region of the key.</dd>
+<dd>`<var>ksiz</var>' specifies the size of the region of the key.</dd>
+<dd>`<var>num</var>' specifies the additional value.</dd>
+<dd>If successful, the return value is the summation value, else, it is `NAN'.</dd>
+<dd>If the corresponding record exists, the value is treated as a real number and is added to.  If no record corresponds, a new record of the additional value is stored.</dd>
+</dl>
+
 <p>The function `tcrdbsync' is used in order to synchronize updated contents of a remote database object with the file and the device.</p>
 
 <dl class="api">
@@ -1065,6 +1089,36 @@ int main(int argc, char **argv){
 </dl>
 
 <dl class="api">
+<dt><code>addint</code>: for the function `tcrdbaddint'</dt>
+<dd><dl>
+<dt>Request: <code>[magic:2][ksiz:4][num:4][kbuf:*]</code></dt>
+<dd>Two bytes of the command ID: 0xC8 and 0x60</dd>
+<dd>A 32-bit integer standing for the length of the key</dd>
+<dd>A 32-bit integer standing for the additional number</dd>
+<dd>Arbitrary data of the key</dd>
+<dt>Response: <code>[code:1]([sum:4])</code></dt>
+<dd>An 8-bit integer whose value is 0 on success or another on failure</dd>
+<dd>on success: A 32-bit integer standing for the summation value</dd>
+</dl></dd>
+</dl>
+
+<dl class="api">
+<dt><code>adddouble</code>: for the function `tcrdbadddouble'</dt>
+<dd><dl>
+<dt>Request: <code>[magic:2][ksiz:4][integ:8][fract:8][kbuf:*]</code></dt>
+<dd>Two bytes of the command ID: 0xC8 and 0x61</dd>
+<dd>A 32-bit integer standing for the length of the key</dd>
+<dd>A 64-bit integer standing for the integral of the additional number.</dd>
+<dd>A 64-bit integer standing for the trillionfold fractuation of the additional number.</dd>
+<dd>Arbitrary data of the key</dd>
+<dt>Response: <code>[code:1]([integ:8][fract:8])</code></dt>
+<dd>An 8-bit integer whose value is 0 on success or another on failure</dd>
+<dd>on success: A 64-bit integer standing for the integral of the summation value.</dd>
+<dd>on success: A 64-bit integer standing for the trillionfold fractuation of the summation value.</dd>
+</dl></dd>
+</dl>
+
+<dl class="api">
 <dt><code>sync</code>: for the function `tcrdbsync'</dt>
 <dd><dl>
 <dt>Request: <code>[magic:2]</code></dt>
@@ -1156,7 +1210,7 @@ int main(int argc, char **argv){
 
 <p>To finish the session, the client can shutdown and close the socket at any time.  If not closed, the connection can be reused for the next session.  If protocol violation or some fatal error occurs the server immediately breaks the session and closes the connection.</p>
 
-<p>As for the memcached compatible protocol, the server implements the following commands; "set", "add", "replace", "get", "delete", "incr", "decr", "stats", "flush_all", "version", and "quit".  "noreply" options of update commands are also supported.  However, "flags", "exptime", and "cas unique" parameters are ignored.  The limitation size of each query is 8192 bytes.</p>
+<p>As for the memcached compatible protocol, the server implements the following commands; "set", "add", "replace", "get", "delete", "incr", "decr", "stats", "flush_all", "version", and "quit".  "noreply" options of update commands are also supported.  However, "flags", "exptime", and "cas unique" parameters are ignored.  The limitation size of each query is 8192 bytes except for the entity of the value.</p>
 
 <p>As for the HTTP/1.1 compatible protocol, the server implements the following commands; "GET" (relevant to `tcrdbget'), "HEAD" (relevant to `tcrdbvsiz'), "PUT" (relevant to `tcrdbput'), "POST" (relevant to `tcrdbputkeep'), and "DELETE" (relevant to `tcrdbout').  The URI of each request is treated as the key encoded by the URL encoding.  And the entity body is treated as the value.  However, headers except for "Connection" and "Content-Length" are ignored.  The limitation size of each query is 8192 bytes.</p>
 

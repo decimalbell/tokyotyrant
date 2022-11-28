@@ -178,15 +178,7 @@ static int runimport(int argc, char **argv){
     if(!upath && argv[i][0] == '-'){
       if(!strcmp(argv[i], "-lim")){
         if(++i >= argc) usage();
-        char *suffix;
-        lim = strtoll(argv[i], &suffix, 10);
-        if(*suffix == 'k' || *suffix == 'K'){
-          lim *= 1024LL;
-        } else if(*suffix == 'm' || *suffix == 'M'){
-          lim *= 1024LL * 1024LL;
-        } else if(*suffix == 'g' || *suffix == 'G'){
-          lim *= 1024LL * 1024LL * 1024LL;
-        }
+        lim = tcatoi(argv[i]);
       } else {
         usage();
       }

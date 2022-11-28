@@ -172,10 +172,10 @@ check :
 	$(RUNENV) $(RUNCMD) ./tcrtest read -cnum 5 127.0.0.1
 	$(RUNENV) $(RUNCMD) ./tcrtest read -cnum 5 -mul 5 127.0.0.1
 	$(RUNENV) $(RUNCMD) ./tcrtest remove -cnum 5 127.0.0.1
-
 	$(RUNENV) $(RUNCMD) ./tcrtest rcat -cnum 5 127.0.0.1 50000
 	$(RUNENV) $(RUNCMD) ./tcrtest rcat -cnum 5 -rtt 50 127.0.0.1 50000
-
+	$(RUNENV) $(RUNCMD) ./tcrmgr vanish 127.0.0.1
+	$(RUNENV) $(RUNCMD) ./tcrtest rcat -cnum 5 -dad 127.0.0.1 50000
 	$(RUNENV) $(RUNCMD) ./tcrtest misc -cnum 5 127.0.0.1 5000
 	$(RUNENV) $(RUNCMD) ./tcrtest wicked -cnum 5 127.0.0.1 5000
 	$(RUNENV) $(RUNCMD) ./tcrmgr inform 127.0.0.1

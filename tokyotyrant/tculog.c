@@ -70,6 +70,7 @@ void tculogdel(TCULOG *ulog){
 /* Set AIO control of an update log object. */
 bool tculogsetaio(TCULOG *ulog){
   assert(ulog);
+#if defined(_SYS_LINUX_)
   if(ulog->base || ulog->aiocbs) return false;
   struct aiocb *aiocbs = tcmalloc(TCULAIOCBNUM * sizeof(*aiocbs));
   for(int i = 0; i < TCULAIOCBNUM; i++){
@@ -77,6 +78,9 @@ bool tculogsetaio(TCULOG *ulog){
   }
   ulog->aiocbs = aiocbs;
   return true;
+#else
+  return true;
+#endif
 }
 
 
@@ -235,10 +239,20 @@ bool tculogwrite(TCULOG *ulog, uint64_t ts, uint32_t sid, const void *ptr, int s
       aiocbp->aio_offset = ulog->size;
       aiocbp->aio_buf = tcmemdup(buf, rsiz);
       aiocbp->aio_nbytes = rsiz;
-      if(aio_write(aiocbp) != 0){
-        tcfree((char *)aiocbp->aio_buf);
-        aiocbp->aio_buf = NULL;
-        err = true;
+      while(aio_write(aiocbp) != 0){
+        if(errno != EAGAIN){
+          tcfree((char *)aiocbp->aio_buf);
+          aiocbp->aio_buf = NULL;
+          err = true;
+          break;
+        }
+        for(int i = 0; i < TCULAIOCBNUM; i++){
+          if(i == ulog->aiocbi) continue;
+          if(!tculogflushaiocbp(aiocbs + i)){
+            err = true;
+            break;
+          }
+        }
       }
       ulog->aiocbi = (ulog->aiocbi + 1) % TCULAIOCBNUM;
     } else {

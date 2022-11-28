@@ -60,7 +60,7 @@ typedef struct {                         /* type of structure for an update log 
   uint64_t size;                         /* current size */
   void *aiocbs;                          /* AIO tasks */
   int aiocbi;                            /* index of AIO tasks */
-  off_t aioend;                          /* end offset of AIO tasks */
+  uint64_t aioend;                       /* end offset of AIO tasks */
 } TCULOG;
 
 typedef struct {                         /* type of structure for a log reader */

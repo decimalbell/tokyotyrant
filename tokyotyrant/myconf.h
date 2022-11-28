@@ -91,10 +91,10 @@
 
 #endif
 
-#ifndef _SYS_LINUX_
-#error =========================================================
-#error Your platform is not Linux and is not supported.  Sorry.
-#error =========================================================
+#if !defined(_SYS_LINUX_) && !defined(_SYS_FREEBSD_) && !defined(_SYS_MACOSX_)
+#error =======================================
+#error Your platform is not supported.  Sorry.
+#error =======================================
 #endif
 
 
@@ -195,8 +195,6 @@
 #include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <sys/select.h>
-#include <sys/epoll.h>
 #include <fcntl.h>
 #include <dirent.h>
 #include <aio.h>
@@ -210,6 +208,13 @@
 #include <tchdb.h>
 #include <tcbdb.h>
 #include <tcadb.h>
+
+#if defined(_SYS_FREEBSD_) || defined(_SYS_MACOSX_)
+#define TTUSEKQUEUE    1
+#else
+#include <sys/epoll.h>
+#define TTUSEKQUEUE    0
+#endif
 
 
 
@@ -236,6 +241,45 @@ int _tt_dummyfuncv(int a, ...);
 #define MYEXTSTR        "."
 #define MYCDIRSTR       "."
 #define MYPDIRSTR       ".."
+
+
+
+/*************************************************************************************************
+ * epoll emulation
+ *************************************************************************************************/
+
+
+#if TTUSEKQUEUE
+
+struct epoll_event {
+  uint32_t events;
+  union {
+    void *ptr;
+    int fd;
+  } data;
+};
+
+enum {
+  EPOLLIN = 1 << 0,
+  EPOLLOUT = 1 << 1,
+  EPOLLONESHOT = 1 << 8
+};
+
+enum {
+  EPOLL_CTL_ADD,
+  EPOLL_CTL_MOD,
+  EPOLL_CTL_DEL
+};
+
+int _tt_epoll_create(int size);
+int _tt_epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);
+int _tt_epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout);
+
+#define epoll_create   _tt_epoll_create
+#define epoll_ctl      _tt_epoll_ctl
+#define epoll_wait     _tt_epoll_wait
+
+#endif
 
 
 
